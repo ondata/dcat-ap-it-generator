@@ -1,0 +1,18 @@
+portal:
+  url: "https://dati.regione.sicilia.it"
+  api_key: ""
+  rows_per_page: 100
+  query_template: ""
+
+catalog:
+  uri: "https://dati.regione.sicilia.it/catalog"
+  title: "Catalogo Open Data - Regione Siciliana"
+  description: "Catalogo dataset della Regione Siciliana"
+  issued: ""
+  publisher_name: "Regione Siciliana"
+  publisher_identifier: "r_sicili"
+  language: "ITA"
+  homepage: "https://dati.regione.sicilia.it"
+
+output:
+  path: "output/sicilia.ttl"

@@ -1,0 +1,28 @@
+[project]
+name = "dcat-ap-it-generator"
+version = "0.1.0"
+description = "Genera cataloghi RDF DCAT-AP IT da portali CKAN"
+requires-python = ">=3.13"
+dependencies = [
+    "pyfiglet>=1.0.4",
+    "pyyaml>=6.0.3",
+    "questionary>=2.1.1",
+    "rdflib>=7.6.0",
+    "requests>=2.33.1",
+    "rich>=14.3.3",
+    "typer[all]>=0.24.1",
+]
+
+[project.scripts]
+dcat-ap-it = "dcat_ap_it_generator.cli:app"
+
+[tool.setuptools.packages.find]
+include = ["dcat_ap_it_generator*"]
+
+[tool.setuptools.package-data]
+dcat_ap_it_generator = ["*.yml"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]

@@ -1,0 +1,21 @@
+{
+  "id": "minimal-dataset-001",
+  "name": "minimal-dataset",
+  "title": "Dataset Minimale",
+  "notes": null,
+  "organization": {"name": "test-org", "title": "Organizzazione Test"},
+  "tags": [],
+  "state": "active",
+  "license_title": null,
+  "metadata_created": "2023-01-01T00:00:00",
+  "metadata_modified": "2023-06-01T00:00:00",
+  "issued": null,
+  "modified": null,
+  "author": null,
+  "maintainer": null,
+  "frequency": null,
+  "language": null,
+  "publisher_name": null,
+  "holder_name": null,
+  "resources": []
+}

@@ -1,0 +1,249 @@
+{
+    "help": "https://dati.trentino.it/api/3/action/help_show?name=package_show",
+    "success": true,
+    "result": {
+        "alternate_identifier": "[]",
+        "author": "Agenzia per la coesione sociale",
+        "author_email": "agenzia.coesionesociale@provincia.tn.it",
+        "conforms_to": "[]",
+        "creator": "[{\"creator_identifier\": \"EHGQO1\", \"creator_name\": {\"de\": \"Agenzia per la famiglia \", \"it\": \"Agenzia per la coesione sociale, la famiglia e la natalit\\u00e0\", \"en_GB\": \"Agenzia per la famiglia \", \"fr\": \"Agenzia per la coesione sociale, la famiglia e la natalit\\u00e0\", \"en\": \"Agenzia per la coesione sociale, la famiglia e la natalit\\u00e0\"}}]",
+        "creator_user_id": "6e7ce657-d45d-4972-b3a0-3e63225f1243",
+        "fields_description": "id_Servizio\tServiceNameIT\tServiceNameDE\tCategory\tURL\tMobileContact\tEmail\tAddressIT\tAddressDE\tMunicipalityIT\tMunicipalityDE\tDistrictIT\tDistrictDE\tValid_from\tValid_until\tInfoBonus\tLatitude\tLongitude\tFamilyPassIT\tFamilyPassDE",
+        "frequency": "IRREG",
+        "geographical_geonames_url": "http://www.geonames.org/3165241/",
+        "geographical_name": "ITA_TRT",
+        "id": "f76af483-5e62-43ad-92c5-3bcea666edb0",
+        "identifier": "p_TN:05e077c5-3972-4572-80fa-f03f268c5d5e",
+        "is_version_of": "",
+        "isopen": true,
+        "issued": "04-08-2021",
+        "language": "{DEU,ITA}",
+        "license_id": "cc-by",
+        "license_title": "Creative Commons Attribution 4.0",
+        "license_url": "https://creativecommons.org/licenses/by/4.0/deed.it",
+        "maintainer": "Agenzia per la coesione sociale",
+        "maintainer_email": "agenzia.coesionesociale@provincia.tn.it",
+        "metadata_created": "2021-08-04T12:35:41.758778",
+        "metadata_modified": "2026-04-07T08:03:03.428194",
+        "modified": "01-08-2022",
+        "name": "elenco-aderenti-euregio-family-pass",
+        "notes": "Il dataset raccoglie l'elenco delle organizzazioni che aderiscono al progetto EuregioFamilyPass, attraverso il quale sono offerte delle agevolazioni alle famiglie residenti nell'euroregione Trentino, Alto Adige e Tirolo. \r\n\r\nI dati sono georeferenziati, e c'\u00e8 un link che rimanda al tipo di agevolazione. \r\n\r\nLa risorsa viene aggiornata a scadenza irregolare, contattare il punto di contatto se necessario\r\n\r\nPi\u00f9 informazioni sul progetto a questo link https://www.trentinofamiglia.it/Servizi-Family/EuregioFamilyPass",
+        "num_resources": 3,
+        "num_tags": 12,
+        "organization": {
+            "id": "b2a2ddcf-6939-470c-9a7f-0960c9b85b1e",
+            "name": "pat",
+            "title": "Provincia Autonoma di Trento",
+            "type": "organization",
+            "description": "La Provincia  Autonoma di Trento, come anche la Provincia Autonoma di Bolzano, dal punto di vista dei rapporti Stato - Regioni \u00e8 equiparata ad una regione.",
+            "image_url": "2019-05-08-140213.526630stemmaTrentinologhi153x83px.1472041967.png",
+            "created": "2016-12-27T09:53:32.035312",
+            "is_organization": true,
+            "approval_status": "approved",
+            "state": "active"
+        },
+        "owner_org": "b2a2ddcf-6939-470c-9a7f-0960c9b85b1e",
+        "private": false,
+        "publisher_identifier": "p_TN",
+        "publisher_name": "Provincia Autonoma di Trento",
+        "state": "active",
+        "temporal_coverage": "[]",
+        "themes_aggregate": "[{\"theme\": \"EDUC\", \"subthemes\": []}, {\"theme\": \"INTR\", \"subthemes\": []}]",
+        "title": "Elenco aderenti EuregioFamilyPass",
+        "type": "dataset",
+        "url": "",
+        "version": " 08.2022",
+        "extras": [
+            {
+                "key": "theme",
+                "value": "[\"http://publications.europa.eu/resource/authority/data-theme/EDUC\", \"http://publications.europa.eu/resource/authority/data-theme/INTR\"]"
+            }
+        ],
+        "groups": [
+            {
+                "description": "",
+                "display_name": "Affari Internazionali",
+                "id": "027960c5-9ced-4f61-9a0f-293a5be974e2",
+                "image_display_url": "https://dati.gov.it/sites/default/files/2019-08/topic-intr-hover.png",
+                "name": "affari-internazionali",
+                "title": "Affari Internazionali"
+            },
+            {
+                "description": "Questo concetto identifica dataset che coprono settori quali l'istruzione, la cultura o lo sport. \r\n\r\nL'istruzione \u00e8 il processo di facilitare l'apprendimento, o l'acquisizione di conoscenze, abilit\u00e0, valori, credenze e abitudini. \r\n\r\nLa cultura comprende il comportamento sociale e le norme che si trovano nelle societ\u00e0 umane, cos\u00ec come la conoscenza, le credenze, le arti, le leggi, i costumi, le capacit\u00e0 e le abitudini degli individui in questi gruppi.\r\n\r\nLo sport comprende tutte le forme di attivit\u00e0 fisica agonistica o i giochi che mantengono o migliorano le capacit\u00e0 e le abilit\u00e0 fisiche offrendo al contempo divertimento ai partecipanti e, in alcuni casi, intrattenimento per gli spettatori. \r\n\r\nEs.: competenze, qualifiche e occupazioni europee (ESCO); Stati membri dell'UE e obblighi internazionali in materia di diritti umani; partecipazione a qualsiasi attivit\u00e0 culturale o sportiva negli ultimi 12 mesi per sesso, et\u00e0 e livello di istruzione.\r\n\r\nhttps://op.europa.eu/en/web/eu-vocabularies/concept/-/resource?uri=http://publications.europa.eu/resource/authority/data-theme/EDUC\r\n",
+                "display_name": "Istruzione, cultura e sport",
+                "id": "7fa2f0e9-650a-4356-803d-561be2bafb47",
+                "image_display_url": "https://dati.gov.it/sites/default/files/2019-08/topic-educ-hover.png",
+                "name": "cultura",
+                "title": "Istruzione, cultura e sport"
+            }
+        ],
+        "resources": [
+            {
+                "cache_last_updated": null,
+                "cache_url": null,
+                "created": "2021-08-04T14:41:17.981545",
+                "datastore_active": false,
+                "description": "",
+                "distribution_format": "CSV",
+                "format": "CSV",
+                "hash": "",
+                "id": "cbae521f-f87e-4d82-b322-40b2691b950c",
+                "lang": "",
+                "last_modified": null,
+                "license_type": "https://w3id.org/italia/controlled-vocabulary/licences/A21_CCBY40",
+                "metadata_modified": "2026-04-01T12:25:04.543535",
+                "mimetype": null,
+                "mimetype_inner": null,
+                "name": "Elenco aderenti EuregioFamilyPass",
+                "package_id": "f76af483-5e62-43ad-92c5-3bcea666edb0",
+                "position": 0,
+                "resource_type": null,
+                "size": null,
+                "state": "active",
+                "url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ56Oev66r_pQ9mwU-2ZoPVGxkp2CoUXtKanrsshz6WCBW_5rh5c5wtzH_EcNAFaHjKG5K4d8JUz2Z2/pub?output=csv",
+                "url_type": ""
+            },
+            {
+                "cache_last_updated": null,
+                "cache_url": null,
+                "created": "2021-10-15T13:47:55.176143",
+                "datastore_active": true,
+                "description": "",
+                "distribution_format": "CSV",
+                "format": "CSV",
+                "hash": "",
+                "id": "8cbfa40c-8b16-4af1-8d00-ad6167057c41",
+                "lang": "",
+                "last_modified": null,
+                "license_type": "https://w3id.org/italia/controlled-vocabulary/licences/A21_CCBY40",
+                "metadata_modified": "2026-04-01T12:25:17.394365",
+                "mimetype": null,
+                "mimetype_inner": null,
+                "name": "Decodifica - Category",
+                "package_id": "f76af483-5e62-43ad-92c5-3bcea666edb0",
+                "position": 1,
+                "resource_type": null,
+                "size": null,
+                "state": "active",
+                "url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vTLJ0Tr3VGtIgtHTXyZoLsUvOBJy_VJ7TvBpuI3qhj0LN3YV9O5LejJjna-aeWal4h0B4Eti3cH9ZcW/pub?gid=0&single=true&output=csv",
+                "url_type": ""
+            },
+            {
+                "cache_last_updated": null,
+                "cache_url": null,
+                "created": "2026-03-26T08:44:49.122547",
+                "datastore_active": false,
+                "description": "",
+                "distribution_format": "JSON",
+                "format": "JSON",
+                "hash": "",
+                "id": "8cc25ca5-f334-4a64-9f5b-40d0ad75104c",
+                "lang": "",
+                "last_modified": "2026-04-07T08:03:03.387577",
+                "license_type": "https://w3id.org/italia/controlled-vocabulary/licences/A21_CCBY40",
+                "metadata_modified": "2026-04-07T08:03:03.434221",
+                "mimetype": "application/json",
+                "mimetype_inner": null,
+                "name": "Elenco aderenti EuregioFamilyPass.json",
+                "package_id": "f76af483-5e62-43ad-92c5-3bcea666edb0",
+                "position": 2,
+                "resource_type": null,
+                "size": null,
+                "state": "active",
+                "url": "https://dati.trentino.it/dataset/f76af483-5e62-43ad-92c5-3bcea666edb0/resource/8cc25ca5-f334-4a64-9f5b-40d0ad75104c/download/organizzazioni.json",
+                "url_type": "upload"
+            }
+        ],
+        "tags": [
+            {
+                "display_name": "Agenzia per la famiglia",
+                "id": "415cfd27-693f-42d7-ad13-39079acd9525",
+                "name": "Agenzia per la famiglia",
+                "state": "active",
+                "vocabulary_id": null
+            },
+            {
+                "display_name": "Euregio",
+                "id": "68493898-a4cb-4974-b008-047fd84409e6",
+                "name": "Euregio",
+                "state": "active",
+                "vocabulary_id": null
+            },
+            {
+                "display_name": "agevolazioni tariffarie",
+                "id": "7f0aa2fe-9733-4ce2-a351-d10278ba44ac",
+                "name": "agevolazioni tariffarie",
+                "state": "active",
+                "vocabulary_id": null
+            },
+            {
+                "display_name": "attivit\u00e0 sportive",
+                "id": "25c59433-bfc4-4956-b9ac-a438e8fbbdca",
+                "name": "attivit\u00e0 sportive",
+                "state": "active",
+                "vocabulary_id": null
+            },
+            {
+                "display_name": "coordinate geografiche",
+                "id": "2fbce583-4170-476c-8587-e240072ff8ad",
+                "name": "coordinate geografiche",
+                "state": "active",
+                "vocabulary_id": null
+            },
+            {
+                "display_name": "cultura",
+                "id": "5da4a348-21f6-47c8-860e-64583e809a41",
+                "name": "cultura",
+                "state": "active",
+                "vocabulary_id": null
+            },
+            {
+                "display_name": "famiglia",
+                "id": "7813b2df-90d9-4ccc-ad62-586d0ea24713",
+                "name": "famiglia",
+                "state": "active",
+                "vocabulary_id": null
+            },
+            {
+                "display_name": "georeferenziati",
+                "id": "d31fbeab-735f-4c61-99a6-fc3e3342f2af",
+                "name": "georeferenziati",
+                "state": "active",
+                "vocabulary_id": null
+            },
+            {
+                "display_name": "musei",
+                "id": "6ffc6f0f-2f40-47df-82a8-e211f315255b",
+                "name": "musei",
+                "state": "active",
+                "vocabulary_id": null
+            },
+            {
+                "display_name": "ristoranti",
+                "id": "f6c7150d-d4ed-4d27-acf6-d94a233a9664",
+                "name": "ristoranti",
+                "state": "active",
+                "vocabulary_id": null
+            },
+            {
+                "display_name": "trasporto pubblico",
+                "id": "43b6954e-a077-492e-98ee-ebcecf9ac75f",
+                "name": "trasporto pubblico",
+                "state": "active",
+                "vocabulary_id": null
+            },
+            {
+                "display_name": "welfare",
+                "id": "103e94e2-8030-4750-bd4b-b689ea01e729",
+                "name": "welfare",
+                "state": "active",
+                "vocabulary_id": null
+            }
+        ],
+        "relationships_as_subject": [],
+        "relationships_as_object": [],
+        "dataset_is_local": true,
+        "holder_name": "Provincia Autonoma di Trento",
+        "holder_identifier": "p_TN"
+    }
+}

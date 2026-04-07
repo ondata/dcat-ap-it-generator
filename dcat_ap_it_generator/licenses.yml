@@ -1,0 +1,26 @@
+# Mapping license_title CKAN → URI EU Publications Office
+# https://publications.europa.eu/resource/authority/licence
+
+licenses:
+  "Creative Commons Attribution 4.0": "http://publications.europa.eu/resource/authority/licence/CC_BY_4_0"
+  "Creative Commons Attribution 3.0": "http://publications.europa.eu/resource/authority/licence/CC_BY_3_0"
+  "Creative Commons Attribution 2.5": "http://publications.europa.eu/resource/authority/licence/CC_BY_2_5"
+  "Creative Commons Attribution 2.0": "http://publications.europa.eu/resource/authority/licence/CC_BY_2_0"
+  "Creative Commons CCZero": "http://publications.europa.eu/resource/authority/licence/CC0"
+  "Creative Commons Attribution Share-Alike": "http://publications.europa.eu/resource/authority/licence/CC_BY_SA_4_0"
+  "Creative Commons Attribution Share-Alike 4.0": "http://publications.europa.eu/resource/authority/licence/CC_BY_SA_4_0"
+  "Creative Commons Attribution Share-Alike 3.0": "http://publications.europa.eu/resource/authority/licence/CC_BY_SA_3_0"
+  "Creative Commons Attribution No Derivatives": "http://publications.europa.eu/resource/authority/licence/CC_BY_ND_4_0"
+  "Creative Commons Attribution Non-Commercial": "http://publications.europa.eu/resource/authority/licence/CC_BY_NC_4_0"
+  "Open Data Commons Open Database License (ODbL)": "http://publications.europa.eu/resource/authority/licence/ODBL_1_0"
+  "Open Data Commons Attribution License": "http://publications.europa.eu/resource/authority/licence/ODC_BY"
+  "UK Open Government Licence (OGL)": "http://publications.europa.eu/resource/authority/licence/OGL_UK_2_0"
+  "GNU Free Documentation License": "http://publications.europa.eu/resource/authority/licence/GNU_FDL_1_3"
+  "Other (Open)": "http://publications.europa.eu/resource/authority/licence/OP_DATPRO"
+  "License not specified": "http://publications.europa.eu/resource/authority/licence/OP_DATPRO"
+  "Italian Open Data License 2.0": "http://publications.europa.eu/resource/authority/licence/IODL_2_0"
+  "IODL 2.0": "http://publications.europa.eu/resource/authority/licence/IODL_2_0"
+  "CC BY 4.0": "http://publications.europa.eu/resource/authority/licence/CC_BY_4_0"
+  "CC BY 3.0": "http://publications.europa.eu/resource/authority/licence/CC_BY_3_0"
+  "CC0": "http://publications.europa.eu/resource/authority/licence/CC0"
+  "CC0 1.0": "http://publications.europa.eu/resource/authority/licence/CC0"

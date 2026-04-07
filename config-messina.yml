@@ -1,0 +1,18 @@
+portal:
+  url: "https://dati.comune.messina.it"
+  api_key: ""
+  rows_per_page: 100
+  query_template: ""
+
+catalog:
+  uri: "https://dati.comune.messina.it/catalog"
+  title: "Catalogo Open Data - Comune di Messina"
+  description: "Catalogo dataset del Comune di Messina"
+  issued: ""
+  publisher_name: "Comune di Messina"
+  publisher_identifier: "c_f158"
+  language: "ITA"
+  homepage: "https://dati.comune.messina.it"
+
+output:
+  path: "output/messina.ttl"
