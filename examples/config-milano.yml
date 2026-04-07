@@ -1,0 +1,18 @@
+portal:
+  url: "https://dati.comune.milano.it"  # URL base portale CKAN
+  api_key: ""                            # Opzionale, per portali privati
+  rows_per_page: 100                     # Dataset per richiesta paginata
+  query_template: ""                     # Opzionale, filtro CKAN fq (es. "organization:nome-org")
+
+catalog:
+  uri: "https://dati.comune.milano.it/catalog"
+  title: "Catalogo Open Data - Comune di Milano"
+  description: "Catalogo dataset del Comune di Milano"
+  issued: ""
+  publisher_name: "Comune di Milano"
+  publisher_identifier: "c_f205"         # Codice IPA — cerca su https://indicepa.gov.it
+  language: "ITA"                        # Codice ISO 639-3
+  homepage: "https://dati.comune.milano.it"
+
+output:
+  path: "output/milano.ttl"

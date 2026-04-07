@@ -256,17 +256,20 @@ def map_dataset(dataset: dict, base_url: str, graph: Graph) -> URIRef | None:
     url = dataset.get("url") or f"{base_url.rstrip('/')}/dataset/{ds_id}"
     graph.add((ds_uri, DCAT.landingPage, URIRef(url)))
 
-    # Date
-    issued = _literal_date(dataset.get("issued"))
+    # Date — top-level → extras → fallback metadata_modified
+    issued = _literal_date(dataset.get("issued") or _get_extra(dataset, "issued"))
     if issued:
         graph.add((ds_uri, DCT.issued, issued))
 
-    modified = _literal_date(dataset.get("modified"))
+    modified_raw = (dataset.get("modified")
+                    or _get_extra(dataset, "modified")
+                    or dataset.get("metadata_modified"))
+    modified = _literal_date(modified_raw)
     if modified:
         graph.add((ds_uri, DCT.modified, modified))
 
-    # Frequency
-    freq = frequency_uri(dataset.get("frequency"))
+    # Frequency — top-level → extras
+    freq = frequency_uri(dataset.get("frequency") or _get_extra(dataset, "frequency"))
     if freq:
         graph.add((ds_uri, DCT.accrualPeriodicity, freq))
 
@@ -356,6 +359,16 @@ def build_catalog(config: dict, datasets: list[dict], base_url: str) -> Graph:
     issued = _literal_date(cat_cfg.get("issued"))
     if issued:
         g.add((cat_uri, DCT.issued, issued))
+
+    # dct:modified obbligatorio — data di generazione
+    from datetime import timezone
+    g.add((cat_uri, DCT.modified, Literal(
+        datetime.now(timezone.utc).strftime("%Y-%m-%d"), datatype=XSD.date
+    )))
+
+    # dcat:themeTaxonomy obbligatorio — vocabolario EU Data Themes
+    g.add((cat_uri, DCAT.themeTaxonomy,
+           URIRef("http://publications.europa.eu/resource/authority/data-theme")))
 
     lang = language_uri(cat_cfg.get("language"))
     if lang:
