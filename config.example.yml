@@ -1,18 +1,18 @@
 portal:
-  url: "https://dati.trentino.it"      # URL base portale CKAN
-  api_key: ""                           # Opzionale, per portali privati
-  rows_per_page: 100                    # Dataset per richiesta paginata
-  query_template: ""                    # Opzionale, filtro CKAN fq (es. "organization:pat")
+  url: "https://dati.comune.messina.it"  # URL base portale CKAN
+  api_key: ""                            # Opzionale, per portali privati
+  rows_per_page: 100                     # Dataset per richiesta paginata
+  query_template: ""                     # Opzionale, filtro CKAN fq (es. "organization:nome-org")
 
 catalog:
-  uri: "https://dati.trentino.it/catalog"
-  title: "Catalogo Open Data - PAT"
-  description: "Catalogo dataset della Provincia Autonoma di Trento"
-  issued: "2021-01-01"
-  publisher_name: "Provincia Autonoma di Trento"
-  publisher_identifier: "pat"           # Codice IPA dell'ente
-  language: "ITA"                       # Codice ISO 639-3
-  homepage: "https://dati.trentino.it"
+  uri: "https://dati.comune.messina.it/catalog"
+  title: "Catalogo Open Data - Comune di Messina"
+  description: "Catalogo dataset del Comune di Messina"
+  issued: ""
+  publisher_name: "Comune di Messina"
+  publisher_identifier: "c_f158"         # Codice IPA — cerca su https://indicepa.gov.it
+  language: "ITA"                        # Codice ISO 639-3
+  homepage: "https://dati.comune.messina.it"
 
 output:
-  path: "output/catalog.ttl"
+  path: "output/messina.ttl"
