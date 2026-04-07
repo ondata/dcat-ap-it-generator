@@ -37,39 +37,59 @@ Contiene:
 ## Installazione
 
 ```bash
-uv tool install git+https://github.com/aborruso/dcat-ap-it-generator
+uv tool install git+https://github.com/ondata/dcat-ap-it-generator
+```
+
+## Vuoi testarlo subito?
+
+Nella cartella `examples/` trovi una configurazione già pronta per il portale open data del **Comune di Messina**.
+
+```bash
+# 1. Clona il repository
+git clone https://github.com/ondata/dcat-ap-it-generator
+cd dcat-ap-it-generator
+
+# 2. Installa il tool
+uv tool install .
+
+# 3. Anteprima senza scrivere file
+dcat-ap-it generate --config examples/config-messina.yml --dry-run
+
+# 4. Genera il file Turtle
+dcat-ap-it generate --config examples/config-messina.yml
+# → output/messina.ttl
 ```
 
 ## Uso
 
 ```bash
-# Crea la configurazione per un portale
-dcat-ap-it configure
-
 # Genera il file Turtle
 dcat-ap-it generate --config config.yml
 
-# Preview senza scrivere file
+# Anteprima senza scrivere file
 dcat-ap-it generate --config config.yml --dry-run
 
 # Genera un file per organizzazione
-dcat-ap-it generate --config config.yml --organizations pat,comune-trento
+dcat-ap-it generate --config config.yml --organizations org1,org2
+
+# Wizard interattivo per creare una nuova configurazione
+dcat-ap-it configure
 ```
 
 ## Configurazione
 
-Copia `config.example.yml` e adattalo al tuo portale:
+Copia un file da `examples/` e adattalo al tuo portale:
 
 ```yaml
 portal:
   url: "https://dati.comune.esempio.it"
-  query_template: ""          # opzionale: filtro CKAN (es. "organization:nome-org")
+  query_template: ""          # opzionale: filtro CKAN fq (es. "organization:nome-org")
 
 catalog:
   uri: "https://dati.comune.esempio.it/catalog"
   title: "Catalogo Open Data"
   publisher_name: "Comune di Esempio"
-  publisher_identifier: "c_xxxxx"   # codice IPA
+  publisher_identifier: "c_xxxxx"   # codice IPA — cerca su https://indicepa.gov.it
   language: "ITA"
 
 output:
@@ -82,4 +102,3 @@ output:
 # Ogni domenica alle 3:00
 0 3 * * 0 dcat-ap-it generate --config /path/to/config.yml
 ```
-
