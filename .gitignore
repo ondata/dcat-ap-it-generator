@@ -12,3 +12,4 @@ wheels/
 # Output e config locali
 output/
 config.yml
+tmp/
