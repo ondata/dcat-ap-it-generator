@@ -15,17 +15,19 @@ from dcat_ap_it_generator.namespaces import (
 log = logging.getLogger(__name__)
 
 _LICENSES: dict[str, str] = {}
+_LICENSE_IDS: dict[str, str] = {}
 
 
-def _load_licenses() -> dict[str, str]:
-    global _LICENSES
+def _load_licenses() -> tuple[dict[str, str], dict[str, str]]:
+    global _LICENSES, _LICENSE_IDS
     if _LICENSES:
-        return _LICENSES
+        return _LICENSES, _LICENSE_IDS
     path = os.path.join(os.path.dirname(__file__), "licenses.yml")
     with open(path) as f:
         data = yaml.safe_load(f)
     _LICENSES = data.get("licenses", {})
-    return _LICENSES
+    _LICENSE_IDS = data.get("license_ids", {})
+    return _LICENSES, _LICENSE_IDS
 
 
 # Mapping valori frequenza CKAN → codici EU Vocabularies
@@ -104,8 +106,18 @@ def language_uri(ckan_value: str | None) -> URIRef | None:
 def license_uri(ckan_title: str | None) -> URIRef | None:
     if not ckan_title:
         return None
-    licenses = _load_licenses()
+    licenses, _ = _load_licenses()
     uri = licenses.get(ckan_title)
+    if uri:
+        return URIRef(uri)
+    return None
+
+
+def license_id_uri(ckan_id: str | None) -> URIRef | None:
+    if not ckan_id:
+        return None
+    _, license_ids = _load_licenses()
+    uri = license_ids.get(ckan_id.lower())
     if uri:
         return URIRef(uri)
     return None
@@ -259,12 +271,9 @@ def map_dataset(dataset: dict, base_url: str, graph: Graph) -> URIRef | None:
     for theme in theme_uris(dataset):
         graph.add((ds_uri, DCAT.theme, theme))
 
-    # License — tenta license_title → licenses.yml, fallback su license_url
-    lic = license_uri(dataset.get("license_title"))
-    if lic is None and dataset.get("license_url"):
-        lic = URIRef(dataset["license_url"])
-    if lic:
-        graph.add((ds_uri, DCT.license, lic))
+    # License — priorità: license_id → license_ids.yml, poi license_title → licenses.yml
+    # Va sulle distribuzioni (DCAT-AP IT), non sul dataset
+    lic = license_id_uri(dataset.get("license_id")) or license_uri(dataset.get("license_title"))
 
     # Publisher
     pub_name = dataset.get("publisher_name")
