@@ -127,12 +127,15 @@ def test_map_dataset_minimal_no_frequency():
     uri = map_dataset(ds, BASE_URL, g)
     assert (uri, DCT.accrualPeriodicity, None) not in g
 
-def test_map_dataset_minimal_no_issued():
+def test_map_dataset_minimal_issued_from_metadata_created():
+    """issued cade su metadata_created quando non c'è campo issued esplicito."""
     with open(FIXTURES / "dataset_minimal.json") as f:
         ds = json.load(f)
     g = _make_graph()
     uri = map_dataset(ds, BASE_URL, g)
-    assert (uri, DCT.issued, None) not in g
+    issued_values = list(g.objects(uri, DCT.issued))
+    assert len(issued_values) == 1
+    assert str(issued_values[0]) == "2023-01-01"
 
 def test_map_dataset_without_title_returns_none():
     ds = {"id": "no-title-ds", "title": None}

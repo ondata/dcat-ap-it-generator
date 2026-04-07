@@ -140,7 +140,9 @@ def format_uri(ckan_format: str | None) -> URIRef | None:
 def _literal_date(value: str | None) -> Literal | None:
     if not value:
         return None
-    # Prova vari formati
+    # Tronca eventuale parte temporale ISO (2025-04-22T08:48:11...)
+    if "T" in value:
+        value = value.split("T")[0]
     for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d", "%d/%m/%Y"):
         try:
             dt = datetime.strptime(value, fmt)
@@ -227,6 +229,47 @@ def _add_contact_point(graph: Graph, author: str | None, maintainer: str | None)
     return cp
 
 
+def _subject_uris(dataset: dict) -> list[URIRef]:
+    """Estrae dct:subject dai subthemes EuroVoc nel campo extras 'theme'."""
+    import json as _json
+    raw = _get_extra(dataset, "theme")
+    if not raw:
+        raw = dataset.get("theme")
+    if not raw:
+        return []
+    try:
+        codes = _json.loads(raw) if isinstance(raw, str) else raw
+    except (ValueError, TypeError):
+        return []
+    uris = []
+    for item in codes:
+        if isinstance(item, dict):
+            for sub in item.get("subthemes") or []:
+                if isinstance(sub, str) and sub.startswith("http"):
+                    uris.append(URIRef(sub))
+    return uris
+
+
+def _parse_temporal_coverage(raw: str | None) -> tuple[Literal | None, Literal | None]:
+    """Parsa temporal_coverage JSON array → (t_start, t_end) come Literal o None."""
+    import json as _json
+    if not raw:
+        return None, None
+    try:
+        items = _json.loads(raw)
+    except (ValueError, TypeError):
+        return None, None
+    if not items or not isinstance(items, list):
+        return None, None
+    first = items[0]
+    if not isinstance(first, dict):
+        return None, None
+    return (
+        _literal_date(first.get("temporal_start")),
+        _literal_date(first.get("temporal_end")),
+    )
+
+
 def map_dataset(dataset: dict, base_url: str, graph: Graph) -> URIRef | None:
     ds_id = dataset.get("id")
     title = dataset.get("title")
@@ -256,8 +299,10 @@ def map_dataset(dataset: dict, base_url: str, graph: Graph) -> URIRef | None:
     url = dataset.get("url") or f"{base_url.rstrip('/')}/dataset/{ds_id}"
     graph.add((ds_uri, DCAT.landingPage, URIRef(url)))
 
-    # Date — top-level → extras → fallback metadata_modified
-    issued = _literal_date(dataset.get("issued") or _get_extra(dataset, "issued"))
+    # Date — top-level → extras → metadata_created (issued) / metadata_modified (modified)
+    issued = _literal_date(
+        dataset.get("issued") or _get_extra(dataset, "issued") or dataset.get("metadata_created")
+    )
     if issued:
         graph.add((ds_uri, DCT.issued, issued))
 
@@ -273,31 +318,36 @@ def map_dataset(dataset: dict, base_url: str, graph: Graph) -> URIRef | None:
     if freq:
         graph.add((ds_uri, DCT.accrualPeriodicity, freq))
 
-    # Language — primo valore
-    lang = language_uri(dataset.get("language"))
+    # Language — top-level → extras
+    lang = language_uri(dataset.get("language") or _get_extra(dataset, "language"))
     if lang:
         graph.add((ds_uri, DCT.language, lang))
 
-    # Themes (dcat:theme — EU Data Themes)
+    # Themes (dcat:theme — EU Data Themes) + dct:subject dai sottotemi EuroVoc
     for theme in theme_uris(dataset):
         graph.add((ds_uri, DCAT.theme, theme))
+    for subj in _subject_uris(dataset):
+        graph.add((ds_uri, DCT.subject, subj))
 
     # License — priorità: license_id → license_ids.yml, poi license_title → licenses.yml
     # Va sulle distribuzioni (DCAT-AP IT), non sul dataset
     lic = license_id_uri(dataset.get("license_id")) or license_uri(dataset.get("license_title"))
 
-    # Publisher
-    pub_name = dataset.get("publisher_name")
+    # Publisher — top-level → extras → organization.title
+    pub_name = (dataset.get("publisher_name")
+                or _get_extra(dataset, "publisher_name"))
     if not pub_name and isinstance(dataset.get("organization"), dict):
         pub_name = dataset["organization"].get("title")
+    pub_id = dataset.get("publisher_identifier") or _get_extra(dataset, "publisher_identifier")
     if pub_name:
-        publisher = _add_agent(graph, pub_name, dataset.get("publisher_identifier"))
+        publisher = _add_agent(graph, pub_name, pub_id)
         graph.add((ds_uri, DCT.publisher, publisher))
 
-    # Rights holder
-    holder_name = dataset.get("holder_name")
+    # Rights holder — top-level → extras
+    holder_name = dataset.get("holder_name") or _get_extra(dataset, "holder_name")
+    holder_id = dataset.get("holder_identifier") or _get_extra(dataset, "holder_identifier")
     if holder_name:
-        holder = _add_agent(graph, holder_name, dataset.get("holder_identifier"))
+        holder = _add_agent(graph, holder_name, holder_id)
         graph.add((ds_uri, DCT.rightsHolder, holder))
 
     # Contact point
@@ -305,20 +355,23 @@ def map_dataset(dataset: dict, base_url: str, graph: Graph) -> URIRef | None:
     if cp:
         graph.add((ds_uri, DCAT.contactPoint, cp))
 
-    # Spatial (geographical_name)
-    geo_name = dataset.get("geographical_name")
-    if geo_name:
+    # Spatial — top-level → extras (geographical_name + geographical_geonames_url)
+    geo_name = dataset.get("geographical_name") or _get_extra(dataset, "geographical_name")
+    geo_url = dataset.get("geographical_geonames_url") or _get_extra(dataset, "geographical_geonames_url")
+    if geo_name or geo_url:
         location = BNode()
         graph.add((location, RDF.type, DCT.Location))
-        graph.add((location, FOAF.name, Literal(geo_name)))
-        geo_url = dataset.get("geographical_geonames_url")
+        if geo_name:
+            graph.add((location, FOAF.name, Literal(geo_name)))
         if geo_url:
             graph.add((location, DCT.identifier, URIRef(geo_url)))
         graph.add((ds_uri, DCT.spatial, location))
 
-    # Temporal coverage
+    # Temporal coverage — top-level fields, poi JSON array in extras (temporal_coverage)
     t_start = _literal_date(dataset.get("temporal_start"))
     t_end = _literal_date(dataset.get("temporal_end"))
+    if not t_start and not t_end:
+        t_start, t_end = _parse_temporal_coverage(_get_extra(dataset, "temporal_coverage"))
     if t_start or t_end:
         period = BNode()
         graph.add((period, RDF.type, DCT.PeriodOfTime))
