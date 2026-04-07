@@ -24,3 +24,6 @@ licenses:
   "CC BY 3.0": "http://publications.europa.eu/resource/authority/licence/CC_BY_3_0"
   "CC0": "http://publications.europa.eu/resource/authority/licence/CC0"
   "CC0 1.0": "http://publications.europa.eu/resource/authority/licence/CC0"
+  # Label generiche senza versione — mappate a CC BY 4.0 (versione corrente)
+  "Creative Commons Attribution": "http://publications.europa.eu/resource/authority/licence/CC_BY_4_0"
+  "Creative Commons Attribuzione": "http://publications.europa.eu/resource/authority/licence/CC_BY_4_0"

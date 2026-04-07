@@ -259,8 +259,12 @@ def map_dataset(dataset: dict, base_url: str, graph: Graph) -> URIRef | None:
     for theme in theme_uris(dataset):
         graph.add((ds_uri, DCAT.theme, theme))
 
-    # License
+    # License — tenta license_title → licenses.yml, fallback su license_url
     lic = license_uri(dataset.get("license_title"))
+    if lic is None and dataset.get("license_url"):
+        lic = URIRef(dataset["license_url"])
+    if lic:
+        graph.add((ds_uri, DCT.license, lic))
 
     # Publisher
     pub_name = dataset.get("publisher_name")
