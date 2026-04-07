@@ -8,7 +8,7 @@ from rdflib import Graph, Literal, URIRef, BNode
 from rdflib.namespace import RDF, XSD
 
 from dcat_ap_it_generator.namespaces import (
-    BINDINGS, DCAT, DCATAPIT, DCT,
+    BINDINGS, DCAT, DCATAPIT, DCT, EU_DATA_THEME,
     EU_FILE_TYPE, EU_FREQUENCY, EU_LANGUAGE, FOAF, VCARD,
 )
 
@@ -45,6 +45,35 @@ _FREQUENCY_MAP = {
     "UPDATE_CONT": "UPDATE_CONT",
     "HOURLY": "HOURLY",
 }
+
+
+def _get_extra(dataset: dict, key: str) -> str | None:
+    """Estrae il valore di un extra field dal dataset CKAN."""
+    for item in dataset.get("extras") or []:
+        if isinstance(item, dict) and item.get("key") == key:
+            return item.get("value")
+    return None
+
+
+def theme_uris(dataset: dict) -> list[URIRef]:
+    """Restituisce URI dcat:theme dal campo extra 'theme' (JSON array di codici EU)."""
+    import json as _json
+    raw = _get_extra(dataset, "theme")
+    if not raw:
+        return []
+    try:
+        codes = _json.loads(raw)
+    except (ValueError, TypeError):
+        return []
+    uris = []
+    for code in codes:
+        if isinstance(code, str):
+            # Già URI completa
+            if code.startswith("http"):
+                uris.append(URIRef(code))
+            else:
+                uris.append(EU_DATA_THEME[code.upper()])
+    return uris
 
 
 def frequency_uri(ckan_value: str | None) -> URIRef | None:
@@ -225,6 +254,10 @@ def map_dataset(dataset: dict, base_url: str, graph: Graph) -> URIRef | None:
     lang = language_uri(dataset.get("language"))
     if lang:
         graph.add((ds_uri, DCT.language, lang))
+
+    # Themes (dcat:theme — EU Data Themes)
+    for theme in theme_uris(dataset):
+        graph.add((ds_uri, DCAT.theme, theme))
 
     # License
     lic = license_uri(dataset.get("license_title"))
