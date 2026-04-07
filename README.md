@@ -1,6 +1,6 @@
 # DCAT-AP IT Generator
 
-> Idea originale di [Daniele Crespi](https://github.com/danielecrespi).
+> Idea originale di [Daniele Crespi](https://www.linkedin.com/in/danielecrespi/).
 
 Genera file RDF Turtle conformi a [DCAT-AP IT](https://www.dati.gov.it/sites/default/files/2020-02/DCAT-AP_IT.owl) interrogando qualsiasi portale CKAN via API.
 
