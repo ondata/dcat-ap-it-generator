@@ -70,11 +70,19 @@ def theme_uris(dataset: dict) -> list[URIRef]:
     uris = []
     for code in codes:
         if isinstance(code, str):
-            # Già URI completa
+            # Formato semplice: ["GOVE", "TRAN"]
             if code.startswith("http"):
                 uris.append(URIRef(code))
             else:
                 uris.append(EU_DATA_THEME[code.upper()])
+        elif isinstance(code, dict) and "theme" in code:
+            # Formato aggregato: [{"theme": "GOVE", "subthemes": [...]}]
+            theme_code = code["theme"]
+            if isinstance(theme_code, str):
+                if theme_code.startswith("http"):
+                    uris.append(URIRef(theme_code))
+                else:
+                    uris.append(EU_DATA_THEME[theme_code.upper()])
     return uris
 
 
