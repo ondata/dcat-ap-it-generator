@@ -316,3 +316,77 @@ def test_dataset_single_language():
     uri = map_dataset(ds, BASE_URL, g)
     langs = list(g.objects(uri, DCT.language))
     assert langs == [EU_LANGUAGE["ITA"]]
+
+
+# --- contact point: solo se email presente ---
+
+def test_no_contact_point_without_email():
+    """Senza email, non deve essere emesso dcatapit:Organization (Rule 209)."""
+    from dcat_ap_it_generator.namespaces import VCARD
+    ds = {
+        "id": "test-no-email",
+        "title": "Test No Email",
+        "metadata_created": "2024-01-01",
+        "author": "Mario Rossi",
+        "author_email": None,
+        "maintainer_email": None,
+        "organization": {"id": "org-1", "title": "Ente Test", "name": "ente-test"},
+        "resources": [],
+    }
+    g = _make_graph()
+    map_dataset(ds, BASE_URL, g)
+    orgs = list(g.subjects(RDF.type, DCATAPIT.Organization))
+    assert len(orgs) == 0
+
+def test_contact_point_with_email():
+    """Con email, il contact point deve essere emesso con vcard:hasEmail."""
+    from dcat_ap_it_generator.namespaces import VCARD
+    ds = {
+        "id": "test-with-email",
+        "title": "Test With Email",
+        "metadata_created": "2024-01-01",
+        "author_email": "test@example.com",
+        "organization": {"id": "org-2", "title": "Ente Test", "name": "ente-test"},
+        "resources": [],
+    }
+    g = _make_graph()
+    map_dataset(ds, BASE_URL, g)
+    orgs = list(g.subjects(RDF.type, DCATAPIT.Organization))
+    assert len(orgs) == 1
+    emails = list(g.objects(orgs[0], VCARD.hasEmail))
+    assert len(emails) == 1
+
+
+# --- PeriodOfTime: solo se startDate presente ---
+
+def test_no_temporal_without_start():
+    """Solo end_date senza start: non deve essere emesso dct:temporal (Rule 196)."""
+    ds = {
+        "id": "test-no-start",
+        "title": "Test No Start",
+        "metadata_created": "2024-01-01",
+        "extras": [
+            {"key": "temporal_coverage", "value": '[{"temporal_start": "", "temporal_end": "2024-12-31"}]'},
+        ],
+        "resources": [],
+    }
+    g = _make_graph()
+    uri = map_dataset(ds, BASE_URL, g)
+    periods = list(g.objects(uri, DCT.temporal))
+    assert len(periods) == 0
+
+def test_temporal_with_start_only():
+    """Solo start_date: deve essere emesso dct:temporal senza endDate."""
+    ds = {
+        "id": "test-start-only",
+        "title": "Test Start Only",
+        "metadata_created": "2024-01-01",
+        "extras": [
+            {"key": "temporal_coverage", "value": '[{"temporal_start": "2020-01-01", "temporal_end": ""}]'},
+        ],
+        "resources": [],
+    }
+    g = _make_graph()
+    uri = map_dataset(ds, BASE_URL, g)
+    periods = list(g.objects(uri, DCT.temporal))
+    assert len(periods) == 1

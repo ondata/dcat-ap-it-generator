@@ -242,6 +242,10 @@ def _add_agent(graph: Graph, name: str, identifier: str | None = None) -> BNode:
 
 
 def _add_contact_point(graph: Graph, dataset: dict, base_url: str) -> URIRef | None:
+    """Emette dcatapit:Organization solo se c'è un'email (vcard:hasEmail obbligatoria per OWL)."""
+    email = dataset.get("maintainer_email") or dataset.get("author_email")
+    if not email:
+        return None
     org = dataset.get("organization")
     if not isinstance(org, dict):
         return None
@@ -258,9 +262,7 @@ def _add_contact_point(graph: Graph, dataset: dict, base_url: str) -> URIRef | N
     name = org.get("title") or org.get("name")
     if name:
         graph.add((org_uri, VCARD.fn, Literal(name)))
-    email = dataset.get("maintainer_email") or dataset.get("author_email")
-    if email:
-        graph.add((org_uri, VCARD.hasEmail, URIRef(f"mailto:{email}")))
+    graph.add((org_uri, VCARD.hasEmail, URIRef(f"mailto:{email}")))
     graph.add((org_uri, VCARD.hasURL, URIRef(base_url.rstrip("/"))))
     return org_uri
 
@@ -417,12 +419,12 @@ def map_dataset(dataset: dict, base_url: str, graph: Graph) -> URIRef | None:
     t_end = _literal_date(dataset.get("temporal_end"))
     if not t_start and not t_end:
         t_start, t_end = _parse_temporal_coverage(_get_extra(dataset, "temporal_coverage"))
-    if t_start or t_end:
+    # dcatapit:startDate obbligatorio su PeriodOfTime (Rule 196) — emettiamo solo se presente
+    if t_start:
         period = BNode()
         graph.add((period, RDF.type, DCT.PeriodOfTime))
-        if t_start:
-            graph.add((period, DCAT.startDate, t_start))
-            graph.add((period, DCATAPIT.startDate, t_start))
+        graph.add((period, DCAT.startDate, t_start))
+        graph.add((period, DCATAPIT.startDate, t_start))
         if t_end:
             graph.add((period, DCAT.endDate, t_end))
             graph.add((period, DCATAPIT.endDate, t_end))

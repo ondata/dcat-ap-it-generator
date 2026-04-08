@@ -1,0 +1,19 @@
+portal:
+  url: "https://www.opendata.maggioli.cloud"
+  api_key: ""
+  rows_per_page: 100
+  query_template: "organization:comune-di-olbia"
+
+catalog:
+  uri: "https://www.opendata.maggioli.cloud/catalog"
+  title: "Catalogo Open Data - Comune di Olbia"
+  description: "Catalogo dataset del Comune di Olbia"
+  issued: ""
+  publisher_name: "Comune di Olbia"
+  publisher_identifier: "c_g015"           # Codice IPA
+  language: "ITA"
+  homepage: "https://www.opendata.maggioli.cloud"
+  spatial: "https://www.geonames.org/2523650"  # Olbia
+
+output:
+  path: "output/olbia.ttl"
