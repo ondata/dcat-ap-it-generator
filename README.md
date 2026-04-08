@@ -40,6 +40,8 @@ Contiene:
 uv tool install git+https://github.com/ondata/dcat-ap-it-generator
 ```
 
+Il pacchetto include le **154 regole SPARQL DCAT-AP IT** (da [daf-semantic-validator](https://github.com/italia/daf-semantic-validator)) usate dal comando `validate`. Non è necessario scaricarle separatamente.
+
 ## Vuoi testarlo subito?
 
 Nella cartella `examples/` trovi una configurazione già pronta per il portale open data del **Comune di Messina**.
@@ -74,6 +76,12 @@ dcat-ap-it generate --config config.yml --organizations org1,org2
 
 # Wizard interattivo per creare una nuova configurazione
 dcat-ap-it configure
+
+# Valida un file TTL contro le 154 regole DCAT-AP IT
+dcat-ap-it validate output/catalog.ttl
+
+# Solo errori (esclude warning)
+dcat-ap-it validate output/catalog.ttl --errors-only
 ```
 
 ## Configurazione
@@ -82,15 +90,22 @@ Copia un file da `examples/` e adattalo al tuo portale:
 
 ```yaml
 portal:
-  url: "https://dati.comune.esempio.it"
-  query_template: ""          # opzionale: filtro CKAN fq (es. "organization:nome-org")
+  url: "https://dati.comune.esempio.it"   # URL base portale CKAN
+  api_key: ""                              # opzionale, per portali privati
+  rows_per_page: 100                       # dataset per richiesta paginata (default: 100)
+  max_datasets: 0                          # limite totale dataset; 0 = nessun limite (default: 0)
+  chunk_size: 0                            # se > 0, genera N file TTL separati (es. 500 → catalog_001.ttl, _002.ttl…)
+  query_template: ""                       # opzionale: filtro CKAN fq (es. "organization:nome-org")
 
 catalog:
   uri: "https://dati.comune.esempio.it/catalog"
   title: "Catalogo Open Data"
+  description: ""                          # opzionale
+  issued: ""                               # opzionale, formato ISO 8601
   publisher_name: "Comune di Esempio"
-  publisher_identifier: "c_xxxxx"   # codice IPA — cerca su https://indicepa.gov.it
-  language: "ITA"
+  publisher_identifier: "c_xxxxx"         # codice IPA — cerca su https://indicepa.gov.it
+  language: "ITA"                          # codice ISO 639-3
+  homepage: ""                             # opzionale
 
 output:
   path: "output/catalog.ttl"

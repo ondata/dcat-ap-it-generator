@@ -2,6 +2,8 @@ portal:
   url: "https://dati.comune.milano.it"  # URL base portale CKAN
   api_key: ""                            # Opzionale, per portali privati
   rows_per_page: 100                     # Dataset per richiesta paginata
+  max_datasets: 0                          # 0 = nessun limite
+  chunk_size: 0                            # 0 = file unico; >0 = N file TTL da chunk dataset ciascuno
   query_template: ""                     # Opzionale, filtro CKAN fq (es. "organization:nome-org")
 
 catalog:

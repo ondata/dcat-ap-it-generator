@@ -19,18 +19,31 @@ def fetch_all_datasets(
     query_template: str = "",
     rows_per_page: int = 100,
     api_key: str = "",
+    max_datasets: int | None = None,
 ) -> Generator[dict, None, None]:
-    """Yield ogni dataset dal portale CKAN, con paginazione automatica."""
+    """Yield ogni dataset dal portale CKAN, con paginazione automatica.
+
+    Args:
+        max_datasets: se impostato, si ferma dopo aver restituito questo numero di dataset.
+                      Utile per debug su portali grandi.
+    """
     headers = {}
     if api_key:
         headers["Authorization"] = api_key
 
     api = _api_url(base_url)
     start = 0
+    yielded = 0
 
     while True:
+        remaining = None
+        if max_datasets is not None:
+            remaining = max_datasets - yielded
+            if remaining <= 0:
+                break
+
         params: dict[str, str | int] = {
-            "rows": rows_per_page,
+            "rows": min(rows_per_page, remaining) if remaining is not None else rows_per_page,
             "start": start,
         }
         if query_template:
@@ -69,6 +82,7 @@ def fetch_all_datasets(
             break
 
         yield from results
+        yielded += len(results)
 
         start += len(results)
         total = data["result"]["count"]

@@ -85,6 +85,10 @@ def generate(
     api_key: str = portal_cfg.get("api_key", "")
     rows_per_page: int = int(portal_cfg.get("rows_per_page", 100))
     query_template: str = portal_cfg.get("query_template", "")
+    max_datasets_cfg = portal_cfg.get("max_datasets")
+    max_datasets: int | None = (int(max_datasets_cfg) or None) if max_datasets_cfg is not None else None
+    chunk_size_cfg = portal_cfg.get("chunk_size")
+    chunk_size: int | None = (int(chunk_size_cfg) or None) if chunk_size_cfg is not None else None
 
     output_path = output or Path(output_cfg.get("path", "output/catalog.ttl"))
 
@@ -93,8 +97,10 @@ def generate(
     from .ckan_client import count_datasets, fetch_all_datasets
     from .mapper import build_catalog
 
-    # Conta dataset totali per progress bar
+    # Conta dataset totali per progress bar (limitato da max_datasets se impostato)
     total = count_datasets(base_url, query_template, api_key)
+    if max_datasets is not None:
+        total = min(total, max_datasets)
     if verbose:
         console.print(f"Portale: [cyan]{base_url}[/cyan]")
         console.print(f"Dataset stimati: [cyan]{total}[/cyan]")
@@ -111,7 +117,7 @@ def generate(
         transient=not verbose,
     ) as progress:
         task = progress.add_task("Fetching datasets...", total=total or None)
-        for ds in fetch_all_datasets(base_url, query_template, rows_per_page, api_key):
+        for ds in fetch_all_datasets(base_url, query_template, rows_per_page, api_key, max_datasets):
             if ds.get("title"):
                 datasets.append(ds)
             else:
@@ -135,6 +141,17 @@ def generate(
             n_dist = sum(len(d.get("resources") or []) for d in org_datasets)
             if verbose:
                 console.print(f"  [green]✓[/green] {org_path} — {len(org_datasets)} dataset, {n_dist} distribuzioni")
+    elif chunk_size:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        stem = output_path.stem
+        for i, start in enumerate(range(0, len(datasets), chunk_size), 1):
+            chunk = datasets[start:start + chunk_size]
+            g = build_catalog(cfg, chunk, base_url)
+            chunk_path = output_path.parent / f"{stem}_{i:03d}.ttl"
+            g.serialize(destination=str(chunk_path), format="turtle")
+            if verbose:
+                n_dist = sum(len(d.get("resources") or []) for d in chunk)
+                console.print(f"  [green]✓[/green] {chunk_path} — {len(chunk)} dataset, {n_dist} distribuzioni")
     else:
         g = build_catalog(cfg, datasets, base_url)
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -143,12 +160,18 @@ def generate(
     duration = int(time.time() - start_time)
     n_dist = sum(len(ds.get("resources") or []) for ds in datasets)
 
+    if chunk_size:
+        n_chunks = -(-len(datasets) // chunk_size)  # ceil division
+        out_label = f"{output_path.parent}/{output_path.stem}_*.ttl ({n_chunks} chunks)"
+    else:
+        out_label = str(output_path)
+
     if verbose:
         _print_summary(base_url, output_path, len(datasets), n_dist, duration)
     else:
         # Output strutturato per agenti
         console.print(
-            f"generated {output_path}  "
+            f"generated {out_label}  "
             f"datasets={len(datasets)} "
             f"distributions={n_dist} "
             f"duration={duration}s"
@@ -255,6 +278,70 @@ def configure(
         yaml.dump(cfg, f, allow_unicode=True, default_flow_style=False)
 
     console.print(f"[green]✓[/green] {output} creato")
+
+
+@app.command()
+def validate(
+    input: Path = typer.Argument(..., help="File TTL da validare"),
+    rules_dir: Path = typer.Option(None, "--rules-dir", help="Directory regole SPARQL (default: built-in)"),
+    errors_only: bool = typer.Option(False, "--errors-only", "-e", help="Mostra solo errori, non warning"),
+) -> None:
+    """Valida un file TTL contro le regole DCAT-AP IT."""
+    from rdflib import Graph
+
+    if not input.exists():
+        err_console.print(f"[red]File non trovato:[/red] {input}")
+        raise typer.Exit(1)
+
+    rules_path = rules_dir or Path(__file__).parent / "rules"
+    rule_files = sorted(f for f in rules_path.glob("*.rq") if not f.suffix == ".suspended")
+
+    console.print(f"Caricamento [cyan]{input}[/cyan]...")
+    g = Graph()
+    g.parse(str(input), format="turtle")
+    console.print(f"  Triple: {len(g)}")
+    console.print(f"  Regole: {len(rule_files)}")
+
+    violations: list[dict] = []
+    for rule_file in rule_files:
+        query = rule_file.read_text()
+        try:
+            results = g.query(query)
+            for row in results:
+                row_d = row.asdict()
+                severity = str(row_d.get("Rule_Severity", "")).lower()
+                if errors_only and severity != "error":
+                    continue
+                violations.append({
+                    "rule": str(row_d.get("Rule_ID", rule_file.stem)),
+                    "severity": severity,
+                    "class": str(row_d.get("Class_Name", "")),
+                    "description": str(row_d.get("Rule_Description", "")),
+                    "message": str(row_d.get("Message", "")),
+                })
+        except Exception:
+            pass  # regola non compatibile con rdflib, skip
+
+    if not violations:
+        console.print(f"[green]✓ Nessuna violazione trovata[/green]")
+        raise typer.Exit(0)
+
+    errors = [v for v in violations if v["severity"] == "error"]
+    warnings = [v for v in violations if v["severity"] != "error"]
+
+    table = Table(title=f"Violazioni DCAT-AP IT — {input.name}", show_lines=False)
+    table.add_column("Rule", style="dim", width=6)
+    table.add_column("Severity", width=8)
+    table.add_column("Class", width=14)
+    table.add_column("Message")
+
+    for v in violations:
+        color = "red" if v["severity"] == "error" else "yellow"
+        table.add_row(v["rule"], f"[{color}]{v['severity']}[/{color}]", v["class"], v["message"])
+
+    console.print(table)
+    console.print(f"Totale: [red]{len(errors)} errori[/red], [yellow]{len(warnings)} warning[/yellow]")
+    raise typer.Exit(1 if errors else 0)
 
 
 if __name__ == "__main__":

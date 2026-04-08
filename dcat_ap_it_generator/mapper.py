@@ -139,6 +139,13 @@ def format_uri(ckan_format: str | None) -> URIRef | None:
     return EU_FILE_TYPE[ckan_format.upper().replace(" ", "_")]
 
 
+def _clean_str(value: str | None) -> str | None:
+    """Rimuove \r e normalizza whitespace per Literal RDF."""
+    if not value:
+        return value
+    return value.replace("\r", "")
+
+
 def _literal_date(value: str | None) -> Literal | None:
     if not value:
         return None
@@ -181,7 +188,7 @@ def map_distribution(resource: dict, dataset_uri: URIRef, license_ref: URIRef | 
     if name:
         graph.add((dist_uri, DCT.title, Literal(name)))
 
-    description = resource.get("description")
+    description = _clean_str(resource.get("description"))
     if description:
         graph.add((dist_uri, DCT.description, Literal(description)))
 
@@ -209,8 +216,9 @@ def map_distribution(resource: dict, dataset_uri: URIRef, license_ref: URIRef | 
     if modified:
         graph.add((dist_uri, DCT.modified, modified))
 
-    if license_ref:
-        graph.add((dist_uri, DCT.license, license_ref))
+    lic = URIRef(resource["license_type"]) if resource.get("license_type") else license_ref
+    if lic:
+        graph.add((dist_uri, DCT.license, lic))
 
     # Collega dataset → distribution
     graph.add((dataset_uri, DCAT.distribution, dist_uri))
@@ -313,7 +321,7 @@ def map_dataset(dataset: dict, base_url: str, graph: Graph) -> URIRef | None:
     # dct:accessRights obbligatorio OWL — default PUBLIC
     graph.add((ds_uri, DCT.accessRights, EU_ACCESS_RIGHT["PUBLIC"]))
 
-    notes = dataset.get("notes")
+    notes = _clean_str(dataset.get("notes"))
     if notes:
         graph.add((ds_uri, DCT.description, Literal(notes)))
 
