@@ -3,8 +3,8 @@ from pathlib import Path
 from rdflib import Graph, URIRef
 from rdflib.namespace import RDF
 
-from dcat_ap_it_generator.mapper import build_catalog, map_dataset, frequency_uri, language_uri, license_uri
-from dcat_ap_it_generator.namespaces import DCAT, DCATAPIT, DCT, EU_FREQUENCY, EU_LANGUAGE, FOAF
+from dcat_ap_it_generator.mapper import build_catalog, map_dataset, frequency_uri, language_uris, license_uri
+from dcat_ap_it_generator.namespaces import DCAT, DCATAPIT, DCT, EU_FREQUENCY, EU_LANGUAGE, FOAF, OWL
 
 FIXTURES = Path(__file__).parent / "fixtures"
 BASE_URL = "https://dati.trentino.it"
@@ -48,19 +48,25 @@ def test_frequency_uri_unknown_value():
     assert frequency_uri("FOOBAR") is None
 
 
-# --- language_uri ---
+# --- language_uris ---
 
-def test_language_uri_ita():
-    assert language_uri("ITA") == EU_LANGUAGE["ITA"]
+def test_language_uris_single():
+    assert language_uris("ITA") == [EU_LANGUAGE["ITA"]]
 
-def test_language_uri_braces_takes_first():
-    assert language_uri("{ITA,DEU}") == EU_LANGUAGE["ITA"]
+def test_language_uris_multi():
+    result = language_uris("{ENG,ITA}")
+    assert EU_LANGUAGE["ENG"] in result
+    assert EU_LANGUAGE["ITA"] in result
+    assert len(result) == 2
 
-def test_language_uri_iso2():
-    assert language_uri("it") == EU_LANGUAGE["ITA"]
+def test_language_uris_iso2():
+    assert language_uris("it") == [EU_LANGUAGE["ITA"]]
 
-def test_language_uri_none():
-    assert language_uri(None) is None
+def test_language_uris_none():
+    assert language_uris(None) == []
+
+def test_language_uris_empty():
+    assert language_uris("") == []
 
 
 # --- license_uri ---
@@ -120,12 +126,13 @@ def test_map_dataset_minimal_no_crash():
     uri = map_dataset(ds, BASE_URL, g)
     assert uri is not None
 
-def test_map_dataset_minimal_no_frequency():
+def test_map_dataset_minimal_frequency_fallback_unknown():
+    """Senza frequency esplicita, il mapper usa UNKNOWN come fallback OWL obbligatorio."""
     with open(FIXTURES / "dataset_minimal.json") as f:
         ds = json.load(f)
     g = _make_graph()
     uri = map_dataset(ds, BASE_URL, g)
-    assert (uri, DCT.accrualPeriodicity, None) not in g
+    assert (uri, DCT.accrualPeriodicity, EU_FREQUENCY["UNKNOWN"]) in g
 
 def test_map_dataset_minimal_issued_from_metadata_created():
     """issued cade su metadata_created quando non c'è campo issued esplicito."""
@@ -135,7 +142,7 @@ def test_map_dataset_minimal_issued_from_metadata_created():
     uri = map_dataset(ds, BASE_URL, g)
     issued_values = list(g.objects(uri, DCT.issued))
     assert len(issued_values) == 1
-    assert str(issued_values[0]) == "2023-01-01"
+    assert str(issued_values[0]) == "2023-01-01T00:00:00"
 
 def test_map_dataset_without_title_returns_none():
     ds = {"id": "no-title-ds", "title": None}
@@ -171,3 +178,141 @@ def test_build_catalog_links_datasets():
     cat_uri = URIRef(f"{BASE_URL}/catalog")
     linked = list(g.objects(cat_uri, DCAT.dataset))
     assert len(linked) == 1
+
+
+# --- catalog spatial ---
+
+def test_build_catalog_spatial():
+    config = {**CONFIG, "catalog": {**CONFIG["catalog"], "spatial": "https://www.geonames.org/123"}}
+    g = build_catalog(config, [], BASE_URL)
+    cat_uri = URIRef(f"{BASE_URL}/catalog")
+    spatial_nodes = list(g.objects(cat_uri, DCT.spatial))
+    assert len(spatial_nodes) == 1
+    geo_id = list(g.objects(spatial_nodes[0], DCATAPIT.geographicalIdentifier))
+    assert len(geo_id) == 1
+    assert str(geo_id[0]) == "https://www.geonames.org/123"
+
+def test_build_catalog_no_spatial_without_config():
+    g = build_catalog(CONFIG, [], BASE_URL)
+    cat_uri = URIRef(f"{BASE_URL}/catalog")
+    spatial_nodes = list(g.objects(cat_uri, DCT.spatial))
+    assert len(spatial_nodes) == 0
+
+
+# --- LicenseDocument ---
+
+def test_license_document_emitted():
+    """Quando un dataset ha licenza CC BY 4.0, il grafo deve contenere un nodo LicenseDocument."""
+    ds = {
+        "id": "test-lic-doc",
+        "title": "Test LicenseDocument",
+        "metadata_created": "2024-01-01",
+        "resources": [{"id": "r1", "url": "http://example.com/data.csv", "format": "CSV"}],
+        "license_id": "cc-by",
+    }
+    g = build_catalog(CONFIG, [ds], BASE_URL)
+    lic_docs = list(g.subjects(RDF.type, DCATAPIT.LicenseDocument))
+    assert len(lic_docs) >= 1
+    # Deve avere foaf:name
+    names = list(g.objects(lic_docs[0], FOAF.name))
+    assert len(names) > 0
+
+def test_license_document_has_version():
+    ds = {
+        "id": "test-lic-ver",
+        "title": "Test License Version",
+        "metadata_created": "2024-01-01",
+        "resources": [{"id": "r1", "url": "http://example.com/data.csv", "format": "CSV"}],
+        "license_id": "cc-by",
+    }
+    g = build_catalog(CONFIG, [ds], BASE_URL)
+    lic_docs = list(g.subjects(RDF.type, DCATAPIT.LicenseDocument))
+    versions = list(g.objects(lic_docs[0], OWL.versionInfo))
+    assert len(versions) == 1
+
+
+# --- themes_aggregate (subthemes EuroVoc) ---
+
+def test_subject_from_themes_aggregate():
+    """dct:subject deve essere estratto da themes_aggregate quando theme non ha subthemes."""
+    ds = {
+        "id": "test-agg",
+        "title": "Test Aggregate",
+        "metadata_created": "2024-01-01",
+        "extras": [
+            {"key": "theme", "value": '["ENVI"]'},
+            {"key": "themes_aggregate", "value": '[{"theme": "ENVI", "subthemes": ["http://eurovoc.europa.eu/100242"]}]'},
+        ],
+        "resources": [],
+    }
+    g = _make_graph()
+    uri = map_dataset(ds, BASE_URL, g)
+    subjects = list(g.objects(uri, DCT.subject))
+    assert URIRef("http://eurovoc.europa.eu/100242") in subjects
+
+def test_subject_fallback_to_theme_with_subthemes():
+    """Se themes_aggregate manca, legge subthemes dal campo theme (formato con dict)."""
+    ds = {
+        "id": "test-theme-sub",
+        "title": "Test Theme Sub",
+        "metadata_created": "2024-01-01",
+        "extras": [
+            {"key": "theme", "value": '[{"theme": "TRAN", "subthemes": ["http://eurovoc.europa.eu/100238"]}]'},
+        ],
+        "resources": [],
+    }
+    g = _make_graph()
+    uri = map_dataset(ds, BASE_URL, g)
+    subjects = list(g.objects(uri, DCT.subject))
+    assert URIRef("http://eurovoc.europa.eu/100238") in subjects
+
+def test_no_subject_without_subthemes():
+    """Nessun dct:subject se theme ha solo codici semplici e niente themes_aggregate."""
+    ds = {
+        "id": "test-no-sub",
+        "title": "Test No Sub",
+        "metadata_created": "2024-01-01",
+        "extras": [
+            {"key": "theme", "value": '["GOVE"]'},
+        ],
+        "resources": [],
+    }
+    g = _make_graph()
+    uri = map_dataset(ds, BASE_URL, g)
+    subjects = list(g.objects(uri, DCT.subject))
+    assert len(subjects) == 0
+
+
+# --- multi-language on dataset ---
+
+def test_dataset_multi_language():
+    ds = {
+        "id": "test-multi-lang",
+        "title": "Test Multi Lang",
+        "metadata_created": "2024-01-01",
+        "extras": [
+            {"key": "language", "value": "{ENG,ITA}"},
+        ],
+        "resources": [],
+    }
+    g = _make_graph()
+    uri = map_dataset(ds, BASE_URL, g)
+    langs = list(g.objects(uri, DCT.language))
+    assert EU_LANGUAGE["ENG"] in langs
+    assert EU_LANGUAGE["ITA"] in langs
+    assert len(langs) == 2
+
+def test_dataset_single_language():
+    ds = {
+        "id": "test-single-lang",
+        "title": "Test Single Lang",
+        "metadata_created": "2024-01-01",
+        "extras": [
+            {"key": "language", "value": "ITA"},
+        ],
+        "resources": [],
+    }
+    g = _make_graph()
+    uri = map_dataset(ds, BASE_URL, g)
+    langs = list(g.objects(uri, DCT.language))
+    assert langs == [EU_LANGUAGE["ITA"]]
