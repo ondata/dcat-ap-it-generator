@@ -8,7 +8,7 @@ from rdflib import Graph, Literal, URIRef, BNode
 from rdflib.namespace import RDF, XSD
 
 from dcat_ap_it_generator.namespaces import (
-    BINDINGS, DCAT, DCATAPIT, DCT, EU_DATA_THEME,
+    BINDINGS, DCAT, DCATAPIT, DCT, EU_ACCESS_RIGHT, EU_DATA_THEME,
     EU_FILE_TYPE, EU_FREQUENCY, EU_LANGUAGE, FOAF, VCARD,
 )
 
@@ -36,8 +36,10 @@ _FREQUENCY_MAP = {
     "WEEKLY": "WEEKLY",
     "BIWEEKLY": "BIWEEKLY",
     "MONTHLY": "MONTHLY",
+    "BIMONTHLY": "BIMONTHLY",
     "QUARTERLY": "QUARTERLY",
     "BIANNUAL": "BIANNUAL",
+    "ANNUAL_2": "BIANNUAL",   # alias CKAN → EU BIANNUAL (2 volte l'anno)
     "ANNUAL": "ANNUAL",
     "IRREG": "IRREG",
     "UNKNOWN": "UNKNOWN",
@@ -140,9 +142,12 @@ def format_uri(ckan_format: str | None) -> URIRef | None:
 def _literal_date(value: str | None) -> Literal | None:
     if not value:
         return None
-    # Tronca eventuale parte temporale ISO (2025-04-22T08:48:11...)
     if "T" in value:
-        value = value.split("T")[0]
+        try:
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return Literal(dt.strftime("%Y-%m-%dT%H:%M:%S"), datatype=XSD.dateTime)
+        except ValueError:
+            value = value.split("T")[0]
     for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d", "%d/%m/%Y"):
         try:
             dt = datetime.strptime(value, fmt)
@@ -175,6 +180,10 @@ def map_distribution(resource: dict, dataset_uri: URIRef, license_ref: URIRef | 
     name = resource.get("name")
     if name:
         graph.add((dist_uri, DCT.title, Literal(name)))
+
+    description = resource.get("description")
+    if description:
+        graph.add((dist_uri, DCT.description, Literal(description)))
 
     url = resource.get("url")
     if url:
@@ -213,20 +222,36 @@ def _add_agent(graph: Graph, name: str, identifier: str | None = None) -> BNode:
     agent = BNode()
     graph.add((agent, RDF.type, DCATAPIT.Agent))
     graph.add((agent, RDF.type, FOAF.Agent))
-    graph.add((agent, FOAF.name, Literal(name)))
+    graph.add((agent, FOAF.name, Literal(name, lang="it")))
     if identifier:
         graph.add((agent, DCT.identifier, Literal(identifier)))
+    else:
+        log.warning("Agent senza dct:identifier (obbligatorio OWL): %s", name)
     return agent
 
 
-def _add_contact_point(graph: Graph, author: str | None, maintainer: str | None) -> BNode | None:
-    name = maintainer or author
-    if not name:
+def _add_contact_point(graph: Graph, dataset: dict, base_url: str) -> URIRef | None:
+    org = dataset.get("organization")
+    if not isinstance(org, dict):
         return None
-    cp = BNode()
-    graph.add((cp, RDF.type, VCARD.Kind))
-    graph.add((cp, VCARD.fn, Literal(name)))
-    return cp
+    org_id = org.get("id")
+    if not org_id:
+        return None
+    org_uri = URIRef(f"{base_url.rstrip('/')}/organization/{org_id}")
+    # Se già dichiarata, non riaggiungiamo (vcard:hasEmail max cardinality = 1)
+    if (org_uri, RDF.type, DCATAPIT.Organization) in graph:
+        return org_uri
+    graph.add((org_uri, RDF.type, DCATAPIT.Organization))
+    graph.add((org_uri, RDF.type, VCARD.Organization))
+    graph.add((org_uri, RDF.type, VCARD.Kind))
+    name = org.get("title") or org.get("name")
+    if name:
+        graph.add((org_uri, VCARD.fn, Literal(name)))
+    email = dataset.get("maintainer_email") or dataset.get("author_email")
+    if email:
+        graph.add((org_uri, VCARD.hasEmail, URIRef(f"mailto:{email}")))
+    graph.add((org_uri, VCARD.hasURL, URIRef(base_url.rstrip("/"))))
+    return org_uri
 
 
 def _subject_uris(dataset: dict) -> list[URIRef]:
@@ -285,6 +310,9 @@ def map_dataset(dataset: dict, base_url: str, graph: Graph) -> URIRef | None:
     graph.add((ds_uri, DCT.identifier, Literal(ds_id)))
     graph.add((ds_uri, DCT.title, Literal(title)))
 
+    # dct:accessRights obbligatorio OWL — default PUBLIC
+    graph.add((ds_uri, DCT.accessRights, EU_ACCESS_RIGHT["PUBLIC"]))
+
     notes = dataset.get("notes")
     if notes:
         graph.add((ds_uri, DCT.description, Literal(notes)))
@@ -295,9 +323,11 @@ def map_dataset(dataset: dict, base_url: str, graph: Graph) -> URIRef | None:
         if name:
             graph.add((ds_uri, DCAT.keyword, Literal(name)))
 
-    # Landing page
+    # Landing page — obbligatoria, tipizzata foaf:Document (OWL Rule 63)
     url = dataset.get("url") or f"{base_url.rstrip('/')}/dataset/{ds_id}"
-    graph.add((ds_uri, DCAT.landingPage, URIRef(url)))
+    landing = URIRef(url)
+    graph.add((landing, RDF.type, FOAF.Document))
+    graph.add((ds_uri, DCAT.landingPage, landing))
 
     # Date — top-level → extras → metadata_created (issued) / metadata_modified (modified)
     issued = _literal_date(
@@ -310,13 +340,16 @@ def map_dataset(dataset: dict, base_url: str, graph: Graph) -> URIRef | None:
                     or _get_extra(dataset, "modified")
                     or dataset.get("metadata_modified"))
     modified = _literal_date(modified_raw)
-    if modified:
-        graph.add((ds_uri, DCT.modified, modified))
+    if not modified:
+        from datetime import timezone
+        modified = Literal(datetime.now(timezone.utc).strftime("%Y-%m-%d"), datatype=XSD.date)
+    graph.add((ds_uri, DCT.modified, modified))
 
-    # Frequency — top-level → extras
+    # Frequency — top-level → extras, fallback UNKNOWN (obbligatorio OWL)
     freq = frequency_uri(dataset.get("frequency") or _get_extra(dataset, "frequency"))
-    if freq:
-        graph.add((ds_uri, DCT.accrualPeriodicity, freq))
+    if not freq:
+        freq = EU_FREQUENCY["UNKNOWN"]
+    graph.add((ds_uri, DCT.accrualPeriodicity, freq))
 
     # Language — top-level → extras
     lang = language_uri(dataset.get("language") or _get_extra(dataset, "language"))
@@ -343,28 +376,27 @@ def map_dataset(dataset: dict, base_url: str, graph: Graph) -> URIRef | None:
         publisher = _add_agent(graph, pub_name, pub_id)
         graph.add((ds_uri, DCT.publisher, publisher))
 
-    # Rights holder — top-level → extras
+    # Rights holder — top-level → extras, fallback publisher (obbligatorio OWL)
     holder_name = dataset.get("holder_name") or _get_extra(dataset, "holder_name")
     holder_id = dataset.get("holder_identifier") or _get_extra(dataset, "holder_identifier")
+    if not holder_name:
+        holder_name = pub_name
+        holder_id = pub_id
     if holder_name:
         holder = _add_agent(graph, holder_name, holder_id)
         graph.add((ds_uri, DCT.rightsHolder, holder))
 
-    # Contact point
-    cp = _add_contact_point(graph, dataset.get("author"), dataset.get("maintainer"))
+    # Contact point — dcatapit:Organization (obbligatorio OWL Rule 43)
+    cp = _add_contact_point(graph, dataset, base_url)
     if cp:
         graph.add((ds_uri, DCAT.contactPoint, cp))
 
-    # Spatial — top-level → extras (geographical_name + geographical_geonames_url)
-    geo_name = dataset.get("geographical_name") or _get_extra(dataset, "geographical_name")
+    # Spatial — top-level → extras (geographical_geonames_url)
     geo_url = dataset.get("geographical_geonames_url") or _get_extra(dataset, "geographical_geonames_url")
-    if geo_name or geo_url:
+    if geo_url:
         location = BNode()
         graph.add((location, RDF.type, DCT.Location))
-        if geo_name:
-            graph.add((location, FOAF.name, Literal(geo_name)))
-        if geo_url:
-            graph.add((location, DCT.identifier, URIRef(geo_url)))
+        graph.add((location, DCATAPIT.geographicalIdentifier, Literal(geo_url)))
         graph.add((ds_uri, DCT.spatial, location))
 
     # Temporal coverage — top-level fields, poi JSON array in extras (temporal_coverage)
@@ -377,8 +409,10 @@ def map_dataset(dataset: dict, base_url: str, graph: Graph) -> URIRef | None:
         graph.add((period, RDF.type, DCT.PeriodOfTime))
         if t_start:
             graph.add((period, DCAT.startDate, t_start))
+            graph.add((period, DCATAPIT.startDate, t_start))
         if t_end:
             graph.add((period, DCAT.endDate, t_end))
+            graph.add((period, DCATAPIT.endDate, t_end))
         graph.add((ds_uri, DCT.temporal, period))
 
     # Distributions

@@ -1,5 +1,27 @@
 # LOG
 
+## 2026-04-08
+
+- Aggiunti `BIMONTHLY` e `ANNUAL_2` (alias → BIANNUAL) in `_FREQUENCY_MAP`
+- Fix indagine fallback: nessun dataset Messina usa fallback per `modified` o `rightsHolder`
+- `dct:description` su Distribution ora letta da `resource.description`
+- OWL archiviato in `docs/specs/DCAT-AP_IT.owl`
+
+## 2026-04-08 (aggiornamento)
+
+- Analisi sistematica conformità OWL DCAT-AP IT (`docs/specs/DCAT-AP_IT.owl` salvato localmente)
+- Fix obbligatori da OWL + validatore AGID (772 errori su Messina):
+  - `dct:accessRights` → default PUBLIC su ogni Dataset
+  - `dcat:landingPage` tipizzata come `foaf:Document` (Rule 63)
+  - `dct:accrualPeriodicity` → fallback `UNKNOWN` se assente (Rule 180)
+  - `dcatapit:startDate`/`dcatapit:endDate` in `PeriodOfTime` (Rule 196)
+  - `dcat:contactPoint` → `dcatapit:Organization` con URI (Rule 43)
+  - `dct:rightsHolder` → fallback publisher se assente
+  - `dct:modified` → fallback data corrente se assente
+  - `dct:spatial` → `dcatapit:geographicalIdentifier` (Literal) invece di `dct:identifier`
+  - `foaf:name` agenti → tag lingua `@it`
+  - Date con parte temporale → `xsd:dateTime` invece di `xsd:date`
+
 ## 2026-04-07
 
 - Fix compliance DCAT-AP IT obbligatori: `dct:modified` su Dataset (fallback extras → metadata_modified), su Catalog (data UTC corrente), `dcat:themeTaxonomy` su Catalog

@@ -14,6 +14,7 @@ EU_FREQUENCY = Namespace("http://publications.europa.eu/resource/authority/frequ
 EU_LANGUAGE = Namespace("http://publications.europa.eu/resource/authority/language/")
 EU_FILE_TYPE = Namespace("http://publications.europa.eu/resource/authority/file-type/")
 EU_DATA_THEME = Namespace("http://publications.europa.eu/resource/authority/data-theme/")
+EU_ACCESS_RIGHT = Namespace("http://publications.europa.eu/resource/authority/access-right/")
 
 BINDINGS = {
     "dcatapit": DCATAPIT,
