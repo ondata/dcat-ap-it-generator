@@ -106,6 +106,7 @@ catalog:
   publisher_identifier: "c_xxxxx"         # codice IPA — cerca su https://indicepa.gov.it
   language: "ITA"                          # codice ISO 639-3
   homepage: ""                             # opzionale
+  spatial: ""                              # opzionale, URI GeoNames (es. https://www.geonames.org/2524170)
 
 output:
   path: "output/catalog.ttl"

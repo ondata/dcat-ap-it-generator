@@ -1,5 +1,15 @@
 # LOG
 
+## 2026-04-08 (confronto con catalogo ufficiale Messina)
+
+- Confronto sistematico `output/messina.ttl` vs `https://dati.comune.messina.it/catalog.ttl`
+- Fix: lettura subtheme EuroVoc da `themes_aggregate` (non solo `theme`) — risolti 33 warning `dct:subject`
+- Fix: parsing lingue multiple `{ENG,ITA}` — prima prendeva solo il primo valore
+- Aggiunto: nodi `dcatapit:LicenseDocument` con nome, tipo e versione da `licenses.yml`
+- Aggiunto: `dct:spatial` sul catalogo da config (`spatial:` in YAML)
+- Aperta issue ComuneDiMessina/opendata#31: `dct:temporal` errato nell'ufficiale (fallback `metadata_created` + bug inversione DD/MM)
+- Risultato validazione: 0 errori, 112 warning (erano 146) — tutti da dati mancanti in CKAN
+
 ## 2026-04-08
 
 - Aggiunti `BIMONTHLY` e `ANNUAL_2` (alias → BIANNUAL) in `_FREQUENCY_MAP`

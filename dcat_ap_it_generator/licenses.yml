@@ -41,3 +41,100 @@ licenses:
   # Label generiche senza versione — mappate a CC BY 4.0 (versione corrente)
   "Creative Commons Attribution": "http://publications.europa.eu/resource/authority/licence/CC_BY_4_0"
   "Creative Commons Attribuzione": "http://publications.europa.eu/resource/authority/licence/CC_BY_4_0"
+
+# Metadati per generare nodi dcatapit:LicenseDocument
+# URI → {name_it, name_en, type, version}
+license_documents:
+  "http://creativecommons.org/licenses/by/4.0/":
+    name_it: "Creative Commons Attribuzione 4.0 Internazionale (CC BY 4.0)"
+    name_en: "Creative Commons Attribution 4.0 International (CC BY 4.0)"
+    type: "http://purl.org/adms/licencetype/Attribution"
+    version: "4.0"
+  "http://publications.europa.eu/resource/authority/licence/CC_BY_4_0":
+    name_it: "Creative Commons Attribuzione 4.0 Internazionale (CC BY 4.0)"
+    name_en: "Creative Commons Attribution 4.0 International (CC BY 4.0)"
+    type: "http://purl.org/adms/licencetype/Attribution"
+    version: "4.0"
+  "http://publications.europa.eu/resource/authority/licence/CC_BY_3_0":
+    name_it: "Creative Commons Attribuzione 3.0 (CC BY 3.0)"
+    name_en: "Creative Commons Attribution 3.0 (CC BY 3.0)"
+    type: "http://purl.org/adms/licencetype/Attribution"
+    version: "3.0"
+  "http://publications.europa.eu/resource/authority/licence/CC_BY_2_5":
+    name_it: "Creative Commons Attribuzione 2.5 (CC BY 2.5)"
+    name_en: "Creative Commons Attribution 2.5 (CC BY 2.5)"
+    type: "http://purl.org/adms/licencetype/Attribution"
+    version: "2.5"
+  "http://publications.europa.eu/resource/authority/licence/CC_BY_2_0":
+    name_it: "Creative Commons Attribuzione 2.0 (CC BY 2.0)"
+    name_en: "Creative Commons Attribution 2.0 (CC BY 2.0)"
+    type: "http://purl.org/adms/licencetype/Attribution"
+    version: "2.0"
+  "http://publications.europa.eu/resource/authority/licence/CC0":
+    name_it: "Creative Commons CC0 1.0 Universale"
+    name_en: "Creative Commons CC0 1.0 Universal"
+    type: "http://purl.org/adms/licencetype/PublicDomain"
+    version: "1.0"
+  "http://creativecommons.org/publicdomain/zero/1.0/":
+    name_it: "Creative Commons CC0 1.0 Universale"
+    name_en: "Creative Commons CC0 1.0 Universal"
+    type: "http://purl.org/adms/licencetype/PublicDomain"
+    version: "1.0"
+  "http://publications.europa.eu/resource/authority/licence/CC_BY_SA_4_0":
+    name_it: "Creative Commons Attribuzione - Condividi allo stesso modo 4.0 (CC BY-SA 4.0)"
+    name_en: "Creative Commons Attribution Share-Alike 4.0 (CC BY-SA 4.0)"
+    type: "http://purl.org/adms/licencetype/Attribution"
+    version: "4.0"
+  "http://publications.europa.eu/resource/authority/licence/CC_BY_SA_3_0":
+    name_it: "Creative Commons Attribuzione - Condividi allo stesso modo 3.0 (CC BY-SA 3.0)"
+    name_en: "Creative Commons Attribution Share-Alike 3.0 (CC BY-SA 3.0)"
+    type: "http://purl.org/adms/licencetype/Attribution"
+    version: "3.0"
+  "http://publications.europa.eu/resource/authority/licence/CC_BY_NC_4_0":
+    name_it: "Creative Commons Attribuzione - Non commerciale 4.0 (CC BY-NC 4.0)"
+    name_en: "Creative Commons Attribution Non-Commercial 4.0 (CC BY-NC 4.0)"
+    type: "http://purl.org/adms/licencetype/Attribution"
+    version: "4.0"
+  "http://publications.europa.eu/resource/authority/licence/CC_BY_ND_4_0":
+    name_it: "Creative Commons Attribuzione - Non opere derivate 4.0 (CC BY-ND 4.0)"
+    name_en: "Creative Commons Attribution No Derivatives 4.0 (CC BY-ND 4.0)"
+    type: "http://purl.org/adms/licencetype/Attribution"
+    version: "4.0"
+  "http://opendatacommons.org/licenses/odbl/1.0/":
+    name_it: "Open Data Commons Open Database License 1.0 (ODbL)"
+    name_en: "Open Data Commons Open Database License 1.0 (ODbL)"
+    type: "http://purl.org/adms/licencetype/Attribution"
+    version: "1.0"
+  "http://publications.europa.eu/resource/authority/licence/ODBL_1_0":
+    name_it: "Open Data Commons Open Database License 1.0 (ODbL)"
+    name_en: "Open Data Commons Open Database License 1.0 (ODbL)"
+    type: "http://purl.org/adms/licencetype/Attribution"
+    version: "1.0"
+  "http://opendatacommons.org/licenses/by/1.0/":
+    name_it: "Open Data Commons Attribution License 1.0"
+    name_en: "Open Data Commons Attribution License 1.0"
+    type: "http://purl.org/adms/licencetype/Attribution"
+    version: "1.0"
+  "http://publications.europa.eu/resource/authority/licence/ODC_BY":
+    name_it: "Open Data Commons Attribution License"
+    name_en: "Open Data Commons Attribution License"
+    type: "http://purl.org/adms/licencetype/Attribution"
+  "http://opendatacommons.org/licenses/pddl/1.0/":
+    name_it: "Open Data Commons Public Domain Dedication and License 1.0"
+    name_en: "Open Data Commons Public Domain Dedication and License 1.0"
+    type: "http://purl.org/adms/licencetype/PublicDomain"
+    version: "1.0"
+  "http://publications.europa.eu/resource/authority/licence/IODL_2_0":
+    name_it: "Italian Open Data License 2.0 (IODL 2.0)"
+    name_en: "Italian Open Data License 2.0 (IODL 2.0)"
+    type: "http://purl.org/adms/licencetype/Attribution"
+    version: "2.0"
+  "https://w3id.org/italia/controlled-vocabulary/licences/A21_CCBY40":
+    name_it: "Creative Commons Attribuzione 4.0 Internazionale (CC BY 4.0)"
+    name_en: "Creative Commons Attribution 4.0 International (CC BY 4.0)"
+    type: "http://purl.org/adms/licencetype/Attribution"
+    version: "4.0"
+  "https://w3id.org/italia/controlled-vocabulary/licences/A1_PublicDomain":
+    name_it: "Pubblico Dominio"
+    name_en: "Public Domain"
+    type: "http://purl.org/adms/licencetype/PublicDomain"

@@ -13,6 +13,7 @@ catalog:
   publisher_identifier: "c_f158"         # Codice IPA — cerca su https://indicepa.gov.it
   language: "ITA"                        # Codice ISO 639-3
   homepage: "https://dati.comune.messina.it"
+  spatial: "https://www.geonames.org/2524170"   # Messina
 
 output:
   path: "output/messina.ttl"

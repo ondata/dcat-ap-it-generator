@@ -9,17 +9,18 @@ from rdflib.namespace import RDF, XSD
 
 from dcat_ap_it_generator.namespaces import (
     BINDINGS, DCAT, DCATAPIT, DCT, EU_ACCESS_RIGHT, EU_DATA_THEME,
-    EU_FILE_TYPE, EU_FREQUENCY, EU_LANGUAGE, FOAF, VCARD,
+    EU_FILE_TYPE, EU_FREQUENCY, EU_LANGUAGE, FOAF, OWL, VCARD,
 )
 
 log = logging.getLogger(__name__)
 
 _LICENSES: dict[str, str] = {}
 _LICENSE_IDS: dict[str, str] = {}
+_LICENSE_DOCS: dict[str, dict] = {}
 
 
 def _load_licenses() -> tuple[dict[str, str], dict[str, str]]:
-    global _LICENSES, _LICENSE_IDS
+    global _LICENSES, _LICENSE_IDS, _LICENSE_DOCS
     if _LICENSES:
         return _LICENSES, _LICENSE_IDS
     path = os.path.join(os.path.dirname(__file__), "licenses.yml")
@@ -27,6 +28,7 @@ def _load_licenses() -> tuple[dict[str, str], dict[str, str]]:
         data = yaml.safe_load(f)
     _LICENSES = data.get("licenses", {})
     _LICENSE_IDS = data.get("license_ids", {})
+    _LICENSE_DOCS = data.get("license_documents", {})
     return _LICENSES, _LICENSE_IDS
 
 
@@ -97,20 +99,21 @@ def frequency_uri(ckan_value: str | None) -> URIRef | None:
     return None
 
 
-def language_uri(ckan_value: str | None) -> URIRef | None:
-    """Converte es. 'ITA', '{ITA,DEU}', 'it' in URI EU language per il primo valore."""
+def language_uris(ckan_value: str | None) -> list[URIRef]:
+    """Converte es. 'ITA', '{ITA,DEU}', 'it' in lista di URI EU language."""
     if not ckan_value:
-        return None
-    # Strip braces e prendi solo il primo
-    raw = ckan_value.strip("{}")
-    first = raw.split(",")[0].strip().upper()
-    if not first:
-        return None
-    # Normalizza codici a 2 lettere → 3 lettere comuni
+        return []
     _ISO2_TO_3 = {"IT": "ITA", "EN": "ENG", "DE": "DEU", "FR": "FRA", "ES": "SPA"}
-    if len(first) == 2:
-        first = _ISO2_TO_3.get(first, first)
-    return EU_LANGUAGE[first]
+    raw = ckan_value.strip("{}")
+    result = []
+    for code in raw.split(","):
+        code = code.strip().upper()
+        if not code:
+            continue
+        if len(code) == 2:
+            code = _ISO2_TO_3.get(code, code)
+        result.append(EU_LANGUAGE[code])
+    return result
 
 
 def license_uri(ckan_title: str | None) -> URIRef | None:
@@ -263,9 +266,12 @@ def _add_contact_point(graph: Graph, dataset: dict, base_url: str) -> URIRef | N
 
 
 def _subject_uris(dataset: dict) -> list[URIRef]:
-    """Estrae dct:subject dai subthemes EuroVoc nel campo extras 'theme'."""
+    """Estrae dct:subject dai subthemes EuroVoc (themes_aggregate → theme extras)."""
     import json as _json
-    raw = _get_extra(dataset, "theme")
+    # themes_aggregate ha sempre la struttura con subthemes; theme spesso no
+    raw = _get_extra(dataset, "themes_aggregate")
+    if not raw:
+        raw = _get_extra(dataset, "theme")
     if not raw:
         raw = dataset.get("theme")
     if not raw:
@@ -360,8 +366,7 @@ def map_dataset(dataset: dict, base_url: str, graph: Graph) -> URIRef | None:
     graph.add((ds_uri, DCT.accrualPeriodicity, freq))
 
     # Language — top-level → extras
-    lang = language_uri(dataset.get("language") or _get_extra(dataset, "language"))
-    if lang:
+    for lang in language_uris(dataset.get("language") or _get_extra(dataset, "language")):
         graph.add((ds_uri, DCT.language, lang))
 
     # Themes (dcat:theme — EU Data Themes) + dct:subject dai sottotemi EuroVoc
@@ -465,8 +470,7 @@ def build_catalog(config: dict, datasets: list[dict], base_url: str) -> Graph:
     g.add((cat_uri, DCAT.themeTaxonomy,
            URIRef("http://publications.europa.eu/resource/authority/data-theme")))
 
-    lang = language_uri(cat_cfg.get("language"))
-    if lang:
+    for lang in language_uris(cat_cfg.get("language")):
         g.add((cat_uri, DCT.language, lang))
 
     homepage = cat_cfg.get("homepage")
@@ -479,9 +483,41 @@ def build_catalog(config: dict, datasets: list[dict], base_url: str) -> Graph:
         publisher = _add_agent(g, pub_name, pub_id)
         g.add((cat_uri, DCT.publisher, publisher))
 
+    # Spatial — dal config
+    spatial = cat_cfg.get("spatial")
+    if spatial:
+        location = BNode()
+        g.add((location, RDF.type, DCT.Location))
+        g.add((location, DCATAPIT.geographicalIdentifier, Literal(spatial)))
+        g.add((cat_uri, DCT.spatial, location))
+
     for dataset in datasets:
         ds_uri = map_dataset(dataset, base_url, g)
         if ds_uri:
             g.add((cat_uri, DCAT.dataset, ds_uri))
 
+    # LicenseDocument — emetti nodi per le licenze usate nel grafo
+    _add_license_documents(g)
+
     return g
+
+
+def _add_license_documents(graph: Graph) -> None:
+    """Aggiunge nodi dcatapit:LicenseDocument per ogni licenza usata nel grafo."""
+    _load_licenses()
+    license_uris = set(graph.objects(predicate=DCT.license))
+    for lic_uri in license_uris:
+        uri_str = str(lic_uri)
+        doc = _LICENSE_DOCS.get(uri_str)
+        if not doc:
+            continue
+        graph.add((lic_uri, RDF.type, DCATAPIT.LicenseDocument))
+        graph.add((lic_uri, RDF.type, DCT.LicenseDocument))
+        if doc.get("name_it"):
+            graph.add((lic_uri, FOAF.name, Literal(doc["name_it"], lang="it")))
+        if doc.get("name_en"):
+            graph.add((lic_uri, FOAF.name, Literal(doc["name_en"], lang="en")))
+        if doc.get("type"):
+            graph.add((lic_uri, DCT.type, URIRef(doc["type"])))
+        if doc.get("version"):
+            graph.add((lic_uri, OWL.versionInfo, Literal(doc["version"])))
