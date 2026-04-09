@@ -40,7 +40,7 @@ Contiene:
 uv tool install git+https://github.com/ondata/dcat-ap-it-generator
 ```
 
-Il pacchetto include le **154 regole SPARQL DCAT-AP IT** (da [daf-semantic-validator](https://github.com/italia/daf-semantic-validator)) usate dal comando `validate`. Non è necessario scaricarle separatamente.
+Il pacchetto include le **154 regole SPARQL DCAT-AP IT** usate dal comando `validate`. Non è necessario scaricarle separatamente. Le regole combinano quelle originali di [`daf-semantic-validator`](https://github.com/italia/daf-semantic-validator) con correzioni e integrazioni derivate dall'OWL ufficiale — vedi [`docs/rules.md`](docs/rules.md) per i dettagli.
 
 ## Vuoi testarlo subito?
 
