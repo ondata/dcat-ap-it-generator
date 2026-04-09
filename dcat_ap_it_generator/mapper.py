@@ -62,13 +62,15 @@ def _get_extra(dataset: dict, key: str) -> str | None:
 
 
 def theme_uris(dataset: dict) -> list[URIRef]:
-    """Restituisce URI dcat:theme dal campo extra 'theme' (JSON array di codici EU)."""
+    """Restituisce URI dcat:theme dal campo extra 'theme' o dal campo top-level 'theme'."""
     import json as _json
     raw = _get_extra(dataset, "theme")
     if not raw:
+        raw = dataset.get("theme")
+    if not raw:
         return []
     try:
-        codes = _json.loads(raw)
+        codes = _json.loads(raw) if isinstance(raw, str) else raw
     except (ValueError, TypeError):
         return []
     uris = []
@@ -155,7 +157,7 @@ def _literal_date(value: str | None) -> Literal | None:
     if "T" in value:
         try:
             dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-            return Literal(dt.strftime("%Y-%m-%dT%H:%M:%S"), datatype=XSD.dateTime)
+            return Literal(dt.isoformat(), datatype=XSD.dateTime)
         except ValueError:
             value = value.split("T")[0]
     for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d", "%d/%m/%Y"):
@@ -228,7 +230,15 @@ def map_distribution(resource: dict, dataset_uri: URIRef, graph: Graph) -> URIRe
     return dist_uri
 
 
-def _add_agent(graph: Graph, name: str, identifier: str | None = None) -> BNode:
+def _add_agent(
+    graph: Graph,
+    name: str,
+    identifier: str | None = None,
+    _cache: dict | None = None,
+) -> BNode:
+    cache_key = (name, identifier)
+    if _cache is not None and cache_key in _cache:
+        return _cache[cache_key]
     agent = BNode()
     graph.add((agent, RDF.type, DCATAPIT.Agent))
     graph.add((agent, RDF.type, FOAF.Agent))
@@ -237,6 +247,8 @@ def _add_agent(graph: Graph, name: str, identifier: str | None = None) -> BNode:
         graph.add((agent, DCT.identifier, Literal(identifier)))
     else:
         log.warning("Agent senza dct:identifier (obbligatorio OWL): %s", name)
+    if _cache is not None:
+        _cache[cache_key] = agent
     return agent
 
 
@@ -251,7 +263,7 @@ def _add_contact_point(graph: Graph, dataset: dict, base_url: str) -> URIRef | N
     org_id = org.get("id")
     if not org_id:
         return None
-    org_uri = URIRef(f"{base_url.rstrip('/')}/organization/{org_id}")
+    org_uri = URIRef(f"{base_url.rstrip('/')}/organization/{org_id}/{quote(email, safe='')}")
     # Se già dichiarata, non riaggiungiamo (vcard:hasEmail max cardinality = 1)
     if (org_uri, RDF.type, DCATAPIT.Organization) in graph:
         return org_uri
@@ -310,7 +322,7 @@ def _parse_temporal_coverage(raw: str | None) -> tuple[Literal | None, Literal |
     )
 
 
-def map_dataset(dataset: dict, base_url: str, graph: Graph) -> URIRef | None:
+def map_dataset(dataset: dict, base_url: str, graph: Graph, _agent_cache: dict | None = None) -> URIRef | None:
     ds_id = dataset.get("id")
     title = dataset.get("title")
     if not ds_id or not title:
@@ -383,7 +395,7 @@ def map_dataset(dataset: dict, base_url: str, graph: Graph) -> URIRef | None:
         pub_name = dataset["organization"].get("title")
     pub_id = dataset.get("publisher_identifier") or _get_extra(dataset, "publisher_identifier")
     if pub_name:
-        publisher = _add_agent(graph, pub_name, pub_id)
+        publisher = _add_agent(graph, pub_name, pub_id, _cache=_agent_cache)
         graph.add((ds_uri, DCT.publisher, publisher))
 
     # Rights holder — top-level → extras, fallback publisher (obbligatorio OWL)
@@ -393,7 +405,7 @@ def map_dataset(dataset: dict, base_url: str, graph: Graph) -> URIRef | None:
         holder_name = pub_name
         holder_id = pub_id
     if holder_name:
-        holder = _add_agent(graph, holder_name, holder_id)
+        holder = _add_agent(graph, holder_name, holder_id, _cache=_agent_cache)
         graph.add((ds_uri, DCT.rightsHolder, holder))
 
     # Contact point — dcatapit:Organization (obbligatorio OWL Rule 43)
@@ -479,10 +491,12 @@ def build_catalog(config: dict, datasets: list[dict], base_url: str) -> Graph:
     if homepage:
         g.add((cat_uri, FOAF.homepage, URIRef(homepage)))
 
+    agent_cache: dict[tuple, BNode] = {}
+
     pub_name = cat_cfg.get("publisher_name")
     pub_id = cat_cfg.get("publisher_identifier")
     if pub_name:
-        publisher = _add_agent(g, pub_name, pub_id)
+        publisher = _add_agent(g, pub_name, pub_id, _cache=agent_cache)
         g.add((cat_uri, DCT.publisher, publisher))
 
     # Spatial — dal config
@@ -494,7 +508,7 @@ def build_catalog(config: dict, datasets: list[dict], base_url: str) -> Graph:
         g.add((cat_uri, DCT.spatial, location))
 
     for dataset in datasets:
-        ds_uri = map_dataset(dataset, base_url, g)
+        ds_uri = map_dataset(dataset, base_url, g, _agent_cache=agent_cache)
         if ds_uri:
             g.add((cat_uri, DCAT.dataset, ds_uri))
 

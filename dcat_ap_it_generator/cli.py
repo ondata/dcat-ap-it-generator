@@ -114,8 +114,16 @@ def generate(
         console.print(f"Portale: [cyan]{base_url}[/cyan]")
         console.print(f"Dataset stimati: [cyan]{total}[/cyan]")
 
+    # --- Streaming chunk mode: fetch + serialize senza accumulare tutto ---
+    stream_chunks = chunk_size and not org_list and not dry_run
+
     datasets: list[dict] = []
     errors: list[str] = []
+    n_total_datasets = 0
+    n_total_dist = 0
+    n_chunks_written = 0
+
+    start_time = time.time()
 
     with Progress(
         SpinnerColumn(),
@@ -126,63 +134,86 @@ def generate(
         transient=not verbose,
     ) as progress:
         task = progress.add_task("Fetching datasets...", total=total or None)
-        for ds in fetch_all_datasets(base_url, query_template, rows_per_page, api_key, max_datasets, timeout=timeout):
-            if ds.get("title"):
-                datasets.append(ds)
+        try:
+            if stream_chunks:
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                stem = output_path.stem
+                chunk_buf: list[dict] = []
+                for ds in fetch_all_datasets(base_url, query_template, rows_per_page, api_key, max_datasets, timeout=timeout):
+                    progress.update(task, advance=1)
+                    if not ds.get("title"):
+                        errors.append(ds.get("id", "unknown"))
+                        continue
+                    chunk_buf.append(ds)
+                    if chunk_size and len(chunk_buf) >= chunk_size:
+                        n_chunks_written += 1
+                        n_total_datasets += len(chunk_buf)
+                        n_total_dist += sum(len(d.get("resources") or []) for d in chunk_buf)
+                        g = build_catalog(cfg, chunk_buf, base_url)
+                        chunk_path = output_path.parent / f"{stem}_{n_chunks_written:03d}.ttl"
+                        g.serialize(destination=str(chunk_path), format="turtle")
+                        if verbose:
+                            console.print(f"  [green]✓[/green] {chunk_path} — {len(chunk_buf)} dataset")
+                        chunk_buf = []
+                # flush residuo
+                if chunk_buf:
+                    n_chunks_written += 1
+                    n_total_datasets += len(chunk_buf)
+                    n_total_dist += sum(len(d.get("resources") or []) for d in chunk_buf)
+                    g = build_catalog(cfg, chunk_buf, base_url)
+                    chunk_path = output_path.parent / f"{stem}_{n_chunks_written:03d}.ttl"
+                    g.serialize(destination=str(chunk_path), format="turtle")
+                    if verbose:
+                        console.print(f"  [green]✓[/green] {chunk_path} — {len(chunk_buf)} dataset")
             else:
-                errors.append(ds.get("id", "unknown"))
-            progress.update(task, advance=1)
+                for ds in fetch_all_datasets(base_url, query_template, rows_per_page, api_key, max_datasets, timeout=timeout):
+                    if ds.get("title"):
+                        datasets.append(ds)
+                    else:
+                        errors.append(ds.get("id", "unknown"))
+                    progress.update(task, advance=1)
+        except RuntimeError as e:
+            err_console.print(f"[red]Errore fetch dataset:[/red] {e}")
+            raise typer.Exit(1)
 
     if dry_run:
         n_dist = sum(len(ds.get("resources") or []) for ds in datasets)
         _print_summary(base_url, output_path, len(datasets), n_dist, 0, dry_run=True)
         raise typer.Exit(0)
 
-    start_time = time.time()
+    if not stream_chunks:
+        if org_list:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            for org in org_list:
+                org_datasets = [d for d in datasets if _dataset_org(d) == org]
+                g = build_catalog(cfg, org_datasets, base_url)
+                org_path = output_path.parent / f"{org}.ttl"
+                g.serialize(destination=str(org_path), format="turtle")
+                n_dist = sum(len(d.get("resources") or []) for d in org_datasets)
+                if verbose:
+                    console.print(f"  [green]✓[/green] {org_path} — {len(org_datasets)} dataset, {n_dist} distribuzioni")
+        else:
+            g = build_catalog(cfg, datasets, base_url)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            g.serialize(destination=str(output_path), format="turtle")
 
-    if org_list:
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        for org in org_list:
-            org_datasets = [d for d in datasets if _dataset_org(d) == org]
-            g = build_catalog(cfg, org_datasets, base_url)
-            org_path = output_path.parent / f"{org}.ttl"
-            g.serialize(destination=str(org_path), format="turtle")
-            n_dist = sum(len(d.get("resources") or []) for d in org_datasets)
-            if verbose:
-                console.print(f"  [green]✓[/green] {org_path} — {len(org_datasets)} dataset, {n_dist} distribuzioni")
-    elif chunk_size:
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        stem = output_path.stem
-        for i, start in enumerate(range(0, len(datasets), chunk_size), 1):
-            chunk = datasets[start:start + chunk_size]
-            g = build_catalog(cfg, chunk, base_url)
-            chunk_path = output_path.parent / f"{stem}_{i:03d}.ttl"
-            g.serialize(destination=str(chunk_path), format="turtle")
-            if verbose:
-                n_dist = sum(len(d.get("resources") or []) for d in chunk)
-                console.print(f"  [green]✓[/green] {chunk_path} — {len(chunk)} dataset, {n_dist} distribuzioni")
-    else:
-        g = build_catalog(cfg, datasets, base_url)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        g.serialize(destination=str(output_path), format="turtle")
+        n_total_datasets = len(datasets)
+        n_total_dist = sum(len(ds.get("resources") or []) for ds in datasets)
 
     duration = int(time.time() - start_time)
-    n_dist = sum(len(ds.get("resources") or []) for ds in datasets)
 
-    if chunk_size:
-        n_chunks = -(-len(datasets) // chunk_size)  # ceil division
-        out_label = f"{output_path.parent}/{output_path.stem}_*.ttl ({n_chunks} chunks)"
+    if stream_chunks or (chunk_size and not org_list):
+        out_label = f"{output_path.parent}/{output_path.stem}_*.ttl ({n_chunks_written} chunks)"
     else:
         out_label = str(output_path)
 
     if verbose:
-        _print_summary(base_url, output_path, len(datasets), n_dist, duration)
+        _print_summary(base_url, output_path, n_total_datasets, n_total_dist, duration)
     else:
-        # Output strutturato per agenti
         console.print(
             f"generated {out_label}  "
-            f"datasets={len(datasets)} "
-            f"distributions={n_dist} "
+            f"datasets={n_total_datasets} "
+            f"distributions={n_total_dist} "
             f"duration={duration}s"
         )
 
@@ -312,6 +343,7 @@ def validate(
     console.print(f"  Regole: {len(rule_files)}")
 
     violations: list[dict] = []
+    skipped: list[str] = []
     for rule_file in rule_files:
         query = rule_file.read_text()
         try:
@@ -328,8 +360,12 @@ def validate(
                     "description": str(row_d.get("Rule_Description", "")),
                     "message": str(row_d.get("Message", "")),
                 })
-        except Exception:
-            pass  # regola non compatibile con rdflib, skip
+        except Exception as exc:
+            skipped.append(rule_file.stem)
+            err_console.print(f"[dim]Skip {rule_file.stem}: {type(exc).__name__}: {exc}[/dim]")
+
+    if skipped:
+        console.print(f"[yellow]Regole saltate: {len(skipped)}/{len(rule_files)}[/yellow]")
 
     if not violations:
         console.print(f"[green]✓ Nessuna violazione trovata[/green]")
@@ -349,7 +385,8 @@ def validate(
         table.add_row(v["rule"], f"[{color}]{v['severity']}[/{color}]", v["class"], v["message"])
 
     console.print(table)
-    console.print(f"Totale: [red]{len(errors)} errori[/red], [yellow]{len(warnings)} warning[/yellow]")
+    skip_msg = f", [dim]{len(skipped)} regole saltate[/dim]" if skipped else ""
+    console.print(f"Totale: [red]{len(errors)} errori[/red], [yellow]{len(warnings)} warning[/yellow]{skip_msg}")
     raise typer.Exit(1 if errors else 0)
 
 

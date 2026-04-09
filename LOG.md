@@ -1,5 +1,15 @@
 # LOG
 
+## 2026-04-09
+
+- Fix: publisher/rightsHolder BNode deduplicati — stesso agente (name, identifier) riusa lo stesso nodo
+- Fix: timezone preservato in `xsd:dateTime` — `dt.isoformat()` invece di `strftime` senza `%z`
+- Fix: `validate` ora logga regole SPARQL saltate (nome + tipo eccezione) e mostra conteggio finale
+- Fix: `chunk_size` ora fa streaming — accumula chunk dal generatore senza caricare tutti i dataset in memoria
+- Fix: `check_portal` fallback su `package_search` quando `status_show` bloccato (403 Milano)
+- Test: aggiunti `test_ckan_client.py` (HTTP mockato), `test_cli.py` (typer runner, validate), da 39 a 62 test
+- Milano: 2586 dataset, 5926 distribuzioni, 156.211 triple — 0 errori, 0 warning
+
 ## 2026-04-08 (confronto con catalogo ufficiale Messina)
 
 - Confronto sistematico `output/messina.ttl` vs `https://dati.comune.messina.it/catalog.ttl`

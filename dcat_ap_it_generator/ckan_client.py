@@ -40,8 +40,22 @@ def check_portal(base_url: str, api_key: str = "", timeout: int = 30) -> tuple[b
         return False, f"Connessione rifiutata: {base_url}"
     except requests.Timeout:
         return False, f"Timeout dopo {timeout}s: {base_url}"
-    except requests.RequestException as e:
-        return False, f"Errore HTTP: {e}"
+    except requests.RequestException:
+        # Fallback: alcuni portali bloccano status_show ma rispondono a package_search
+        try:
+            resp2 = _SESSION.get(
+                f"{api}/package_search",
+                params={"rows": 0},
+                headers=headers,
+                timeout=timeout,
+            )
+            resp2.raise_for_status()
+            data2 = resp2.json()
+            if data2.get("success"):
+                return True, f"CKAN (status_show bloccato, {data2['result']['count']} dataset)"
+        except requests.RequestException:
+            pass
+        return False, f"Portale non raggiungibile: {base_url}"
 
 
 def fetch_all_datasets(
@@ -100,13 +114,11 @@ def fetch_all_datasets(
                 )
                 resp.raise_for_status()
             except requests.RequestException as e2:
-                log.error("Retry fallito start=%d: %s — skip pagina", start, e2)
-                break
+                raise RuntimeError(f"Retry fallito start={start}: {e2}") from e2
 
         data = resp.json()
         if not data.get("success"):
-            log.error("CKAN API error: %s", data.get("error"))
-            break
+            raise RuntimeError(f"CKAN API error: {data.get('error')}")
 
         results = data["result"]["results"]
         if not results:

@@ -100,8 +100,8 @@ wheels = [
 
 [[package]]
 name = "dcat-ap-it-generator"
-version = "0.1.0"
-source = { virtual = "." }
+version = "0.1.3"
+source = { editable = "." }
 dependencies = [
     { name = "pyfiglet" },
     { name = "pyyaml" },

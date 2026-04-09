@@ -390,3 +390,174 @@ def test_temporal_with_start_only():
     uri = map_dataset(ds, BASE_URL, g)
     periods = list(g.objects(uri, DCT.temporal))
     assert len(periods) == 1
+
+
+# --- Bug fix 2: dcat:theme dal campo top-level (non solo extras) ---
+
+def test_theme_from_toplevel_field_string():
+    """Bug fix: dcat:theme deve essere letto anche dal campo top-level 'theme' (stringa JSON)."""
+    from dcat_ap_it_generator.namespaces import EU_DATA_THEME
+    ds = {
+        "id": "test-theme-toplevel",
+        "title": "Test Theme Top-Level",
+        "metadata_created": "2024-01-01",
+        "theme": '["GOVE", "TRAN"]',
+        "resources": [],
+    }
+    g = _make_graph()
+    uri = map_dataset(ds, BASE_URL, g)
+    themes = list(g.objects(uri, DCAT.theme))
+    assert EU_DATA_THEME["GOVE"] in themes
+    assert EU_DATA_THEME["TRAN"] in themes
+
+def test_theme_from_toplevel_field_list():
+    """Bug fix: dcat:theme deve funzionare anche quando il campo 'theme' è già una lista Python."""
+    from dcat_ap_it_generator.namespaces import EU_DATA_THEME
+    ds = {
+        "id": "test-theme-list",
+        "title": "Test Theme List",
+        "metadata_created": "2024-01-01",
+        "theme": ["ENVI"],
+        "resources": [],
+    }
+    g = _make_graph()
+    uri = map_dataset(ds, BASE_URL, g)
+    themes = list(g.objects(uri, DCAT.theme))
+    assert EU_DATA_THEME["ENVI"] in themes
+
+
+# --- Bug fix 3: contact point con stessa org ma email diverse ---
+
+def test_contact_point_same_org_different_email():
+    """Bug fix: due dataset con stessa org ma email diverse devono avere contact point distinti."""
+    from dcat_ap_it_generator.namespaces import VCARD
+    org = {"id": "org-shared", "title": "Ente Condiviso", "name": "ente-condiviso"}
+    ds1 = {
+        "id": "ds-email-a",
+        "title": "Dataset Email A",
+        "metadata_created": "2024-01-01",
+        "author_email": "a@example.com",
+        "organization": org,
+        "resources": [],
+    }
+    ds2 = {
+        "id": "ds-email-b",
+        "title": "Dataset Email B",
+        "metadata_created": "2024-01-01",
+        "author_email": "b@example.com",
+        "organization": org,
+        "resources": [],
+    }
+    g = build_catalog(CONFIG, [ds1, ds2], BASE_URL)
+
+    orgs = list(g.subjects(RDF.type, DCATAPIT.Organization))
+    assert len(orgs) == 2, f"Expected 2 contact points, got {len(orgs)}: {orgs}"
+
+    all_emails = set()
+    for org_node in orgs:
+        for email in g.objects(org_node, VCARD.hasEmail):
+            all_emails.add(str(email))
+    assert "mailto:a@example.com" in all_emails
+    assert "mailto:b@example.com" in all_emails
+
+def test_contact_point_same_org_same_email_deduped():
+    """Due dataset con stessa org e stessa email devono condividere UN SOLO contact point."""
+    from dcat_ap_it_generator.namespaces import VCARD
+    org = {"id": "org-shared", "title": "Ente Condiviso", "name": "ente-condiviso"}
+    ds1 = {
+        "id": "ds-same-a",
+        "title": "Dataset Same Email A",
+        "metadata_created": "2024-01-01",
+        "author_email": "same@example.com",
+        "organization": org,
+        "resources": [],
+    }
+    ds2 = {
+        "id": "ds-same-b",
+        "title": "Dataset Same Email B",
+        "metadata_created": "2024-01-01",
+        "author_email": "same@example.com",
+        "organization": org,
+        "resources": [],
+    }
+    g = build_catalog(CONFIG, [ds1, ds2], BASE_URL)
+    orgs = list(g.subjects(RDF.type, DCATAPIT.Organization))
+    assert len(orgs) == 1, f"Expected 1 deduplicated contact point, got {len(orgs)}"
+
+
+# --- Agent deduplication (publisher/rightsHolder BNode) ---
+
+def test_publisher_bnode_deduplicated():
+    """Due dataset con stesso publisher devono condividere lo stesso BNode agent."""
+    ds1 = {
+        "id": "ds-pub-a",
+        "title": "Dataset Pub A",
+        "metadata_created": "2024-01-01",
+        "organization": {"id": "org-1", "title": "Ente Comune", "name": "ente-comune"},
+        "publisher_name": "Ente Comune",
+        "publisher_identifier": "ipa-123",
+        "resources": [],
+    }
+    ds2 = {
+        "id": "ds-pub-b",
+        "title": "Dataset Pub B",
+        "metadata_created": "2024-01-01",
+        "organization": {"id": "org-1", "title": "Ente Comune", "name": "ente-comune"},
+        "publisher_name": "Ente Comune",
+        "publisher_identifier": "ipa-123",
+        "resources": [],
+    }
+    g = build_catalog(CONFIG, [ds1, ds2], BASE_URL)
+
+    agents = list(g.subjects(RDF.type, DCATAPIT.Agent))
+    # catalog publisher + 1 shared publisher + 1 shared rightsHolder = max 3 distinct BNodes
+    # but publisher == rightsHolder (same name/id) so should be 2: catalog pub + shared one
+    publisher_nodes_ds1 = list(g.objects(
+        URIRef(f"{BASE_URL}/dataset/ds-pub-a"), DCT.publisher
+    ))
+    publisher_nodes_ds2 = list(g.objects(
+        URIRef(f"{BASE_URL}/dataset/ds-pub-b"), DCT.publisher
+    ))
+    assert len(publisher_nodes_ds1) == 1
+    assert len(publisher_nodes_ds2) == 1
+    assert publisher_nodes_ds1[0] == publisher_nodes_ds2[0], "Same publisher should reuse same BNode"
+
+
+def test_datetime_preserves_timezone():
+    """xsd:dateTime deve preservare il timezone (Z → +00:00)."""
+    from dcat_ap_it_generator.mapper import _literal_date
+    lit = _literal_date("2024-01-01T12:34:56Z")
+    assert lit is not None
+    assert "+00:00" in str(lit), f"Timezone lost: {lit}"
+
+
+def test_datetime_naive_no_spurious_tz():
+    """Datetime naive non deve aggiungere timezone spurio."""
+    from dcat_ap_it_generator.mapper import _literal_date
+    lit = _literal_date("2024-01-01T12:34:56")
+    assert lit is not None
+    assert str(lit) == "2024-01-01T12:34:56"
+
+
+def test_different_publishers_not_deduplicated():
+    """Due dataset con publisher diversi devono avere BNode distinti."""
+    ds1 = {
+        "id": "ds-diff-a",
+        "title": "Dataset Diff A",
+        "metadata_created": "2024-01-01",
+        "publisher_name": "Ente Alpha",
+        "publisher_identifier": "ipa-alpha",
+        "resources": [],
+    }
+    ds2 = {
+        "id": "ds-diff-b",
+        "title": "Dataset Diff B",
+        "metadata_created": "2024-01-01",
+        "publisher_name": "Ente Beta",
+        "publisher_identifier": "ipa-beta",
+        "resources": [],
+    }
+    g = build_catalog(CONFIG, [ds1, ds2], BASE_URL)
+    pub_a = list(g.objects(URIRef(f"{BASE_URL}/dataset/ds-diff-a"), DCT.publisher))
+    pub_b = list(g.objects(URIRef(f"{BASE_URL}/dataset/ds-diff-b"), DCT.publisher))
+    assert pub_a[0] != pub_b[0], "Different publishers should have different BNodes"

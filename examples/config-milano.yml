@@ -10,7 +10,7 @@ catalog:
   uri: "https://dati.comune.milano.it/catalog"
   title: "Catalogo Open Data - Comune di Milano"
   description: "Catalogo dataset del Comune di Milano"
-  issued: ""
+  issued: "2026-04-09"
   publisher_name: "Comune di Milano"
   publisher_identifier: "c_f205"         # Codice IPA — cerca su https://indicepa.gov.it
   language: "ITA"                        # Codice ISO 639-3
