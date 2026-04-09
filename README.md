@@ -1,3 +1,8 @@
+[![PyPI version](https://img.shields.io/pypi/v/dcat-ap-it-generator)](https://pypi.org/project/dcat-ap-it-generator/)
+[![GitHub](https://img.shields.io/badge/github-ondata%2Fdcat--ap--it--generator-blue?logo=github)](https://github.com/ondata/dcat-ap-it-generator)
+[![deepwiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ondata/dcat-ap-it-generator)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 # DCAT-AP IT Generator
 
 > Idea originale di [Daniele Crespi](https://www.linkedin.com/in/danielecrespi/).
