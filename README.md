@@ -37,7 +37,11 @@ Contiene:
 ## Installazione
 
 ```bash
-uv tool install git+https://github.com/ondata/dcat-ap-it-generator
+# da PyPI
+uv tool install dcat-ap-it-generator
+
+# oppure con pip
+pip install dcat-ap-it-generator
 ```
 
 Il pacchetto include **122 regole SPARQL** allineate all'OWL DCAT-AP IT, usate dal comando `validate`. Non è necessario scaricarle separatamente. Le regole combinano quelle originali di [`daf-semantic-validator`](https://github.com/italia/daf-semantic-validator) con correzioni e integrazioni derivate dall'OWL ufficiale — vedi [`docs/rules.md`](docs/rules.md) per i dettagli.
@@ -47,12 +51,12 @@ Il pacchetto include **122 regole SPARQL** allineate all'OWL DCAT-AP IT, usate d
 Nella cartella `examples/` trovi una configurazione già pronta per il portale open data del **Comune di Messina**.
 
 ```bash
-# 1. Clona il repository
+# 1. Installa il tool
+uv tool install dcat-ap-it-generator
+
+# 2. Clona il repository (per i file di esempio)
 git clone https://github.com/ondata/dcat-ap-it-generator
 cd dcat-ap-it-generator
-
-# 2. Installa il tool
-uv tool install .
 
 # 3. Anteprima senza scrivere file
 dcat-ap-it generate --config examples/config-messina.yml --dry-run
