@@ -14,12 +14,43 @@ def _api_url(base_url: str) -> str:
     return base_url.rstrip("/") + "/api/3/action"
 
 
+def check_portal(base_url: str, api_key: str = "", timeout: int = 30) -> tuple[bool, str]:
+    """Verifica che il portale CKAN sia raggiungibile.
+
+    Returns:
+        (ok, message) — ok=True se il portale risponde, False altrimenti.
+    """
+    headers = {}
+    if api_key:
+        headers["Authorization"] = api_key
+
+    api = _api_url(base_url)
+    try:
+        resp = _SESSION.get(
+            f"{api}/status_show",
+            headers=headers,
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("success"):
+            return True, f"CKAN {data['result'].get('ckan_version', '?')}"
+        return False, f"API responded but success=false: {data.get('error')}"
+    except requests.ConnectionError:
+        return False, f"Connessione rifiutata: {base_url}"
+    except requests.Timeout:
+        return False, f"Timeout dopo {timeout}s: {base_url}"
+    except requests.RequestException as e:
+        return False, f"Errore HTTP: {e}"
+
+
 def fetch_all_datasets(
     base_url: str,
     query_template: str = "",
     rows_per_page: int = 100,
     api_key: str = "",
     max_datasets: int | None = None,
+    timeout: int = 30,
 ) -> Generator[dict, None, None]:
     """Yield ogni dataset dal portale CKAN, con paginazione automatica.
 
@@ -54,7 +85,7 @@ def fetch_all_datasets(
                 f"{api}/package_search",
                 params=params,
                 headers=headers,
-                timeout=30,
+                timeout=timeout,
             )
             resp.raise_for_status()
         except requests.RequestException as e:
@@ -65,7 +96,7 @@ def fetch_all_datasets(
                     f"{api}/package_search",
                     params=params,
                     headers=headers,
-                    timeout=30,
+                    timeout=timeout,
                 )
                 resp.raise_for_status()
             except requests.RequestException as e2:
@@ -92,7 +123,7 @@ def fetch_all_datasets(
         time.sleep(0.1)
 
 
-def fetch_organization(base_url: str, org_name: str, api_key: str = "") -> dict | None:
+def fetch_organization(base_url: str, org_name: str, api_key: str = "", timeout: int = 30) -> dict | None:
     """Ritorna i metadati di un'organizzazione CKAN."""
     headers = {}
     if api_key:
@@ -105,7 +136,7 @@ def fetch_organization(base_url: str, org_name: str, api_key: str = "") -> dict 
             f"{api}/organization_show",
             params={"id": org_name},
             headers=headers,
-            timeout=30,
+            timeout=timeout,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -121,6 +152,7 @@ def count_datasets(
     base_url: str,
     query_template: str = "",
     api_key: str = "",
+    timeout: int = 30,
 ) -> int:
     """Ritorna il numero totale di dataset corrispondenti alla query."""
     headers = {}
@@ -137,7 +169,7 @@ def count_datasets(
             f"{api}/package_search",
             params=params,
             headers=headers,
-            timeout=30,
+            timeout=timeout,
         )
         resp.raise_for_status()
         data = resp.json()

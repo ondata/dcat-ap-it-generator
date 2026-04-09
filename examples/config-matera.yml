@@ -1,0 +1,20 @@
+portal:
+  url: "https://dati.comune.matera.it"
+  api_key: ""
+  rows_per_page: 100
+  query_template: ""
+  timeout: 90
+
+catalog:
+  uri: "https://dati.comune.matera.it/catalog"
+  title: "Catalogo Open Data - Comune di Matera"
+  description: "Catalogo dataset del Comune di Matera"
+  issued: ""
+  publisher_name: "Comune di Matera"
+  publisher_identifier: "c_f052"
+  language: "ITA"
+  homepage: "https://dati.comune.matera.it"
+  spatial: "https://www.geonames.org/3173529"
+
+output:
+  path: "output/matera.ttl"

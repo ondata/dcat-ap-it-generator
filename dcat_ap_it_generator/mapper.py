@@ -176,7 +176,7 @@ def _distribution_uri(base_url: str, resource_id: str) -> URIRef:
     return URIRef(f"{base_url.rstrip('/')}/resource/{quote(resource_id)}")
 
 
-def map_distribution(resource: dict, dataset_uri: URIRef, license_ref: URIRef | None, graph: Graph) -> URIRef | None:
+def map_distribution(resource: dict, dataset_uri: URIRef, graph: Graph) -> URIRef | None:
     res_id = resource.get("id")
     if not res_id:
         return None
@@ -219,9 +219,8 @@ def map_distribution(resource: dict, dataset_uri: URIRef, license_ref: URIRef | 
     if modified:
         graph.add((dist_uri, DCT.modified, modified))
 
-    lic = URIRef(resource["license_type"]) if resource.get("license_type") else license_ref
-    if lic:
-        graph.add((dist_uri, DCT.license, lic))
+    if resource.get("license_type"):
+        graph.add((dist_uri, DCT.license, URIRef(resource["license_type"])))
 
     # Collega dataset → distribution
     graph.add((dataset_uri, DCAT.distribution, dist_uri))
@@ -377,10 +376,6 @@ def map_dataset(dataset: dict, base_url: str, graph: Graph) -> URIRef | None:
     for subj in _subject_uris(dataset):
         graph.add((ds_uri, DCT.subject, subj))
 
-    # License — priorità: license_id → license_ids.yml, poi license_title → licenses.yml
-    # Va sulle distribuzioni (DCAT-AP IT), non sul dataset
-    lic = license_id_uri(dataset.get("license_id")) or license_uri(dataset.get("license_title"))
-
     # Publisher — top-level → extras → organization.title
     pub_name = (dataset.get("publisher_name")
                 or _get_extra(dataset, "publisher_name"))
@@ -430,9 +425,14 @@ def map_dataset(dataset: dict, base_url: str, graph: Graph) -> URIRef | None:
             graph.add((period, DCATAPIT.endDate, t_end))
         graph.add((ds_uri, DCT.temporal, period))
 
+    # License sul dataset
+    lic = license_id_uri(dataset.get("license_id")) or license_uri(dataset.get("license_title"))
+    if lic:
+        graph.add((ds_uri, DCT.license, lic))
+
     # Distributions
     for resource in dataset.get("resources") or []:
-        map_distribution(resource, ds_uri, lic, graph)
+        map_distribution(resource, ds_uri, graph)
 
     return ds_uri
 

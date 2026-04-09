@@ -6,6 +6,8 @@ Le regole base provengono dal repository [`italia/daf-semantic-validator`](https
 
 Il file OWL ufficiale dello standard è archiviato in `docs/specs/DCAT-AP_IT.owl` ed è stato usato come riferimento per identificare proprietà obbligatorie e vincoli di cardinalità non coperti dal validator originale.
 
+AgID mette a disposizione un [validatore online](https://validatore.dati.gov.it/dcat-ap_validator.html) per verificare la conformità dei file RDF a DCAT-AP IT.
+
 ---
 
 ## Struttura della cartella `rules/`

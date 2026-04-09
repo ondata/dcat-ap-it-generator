@@ -1,6 +1,6 @@
 [project]
 name = "dcat-ap-it-generator"
-version = "0.1.0"
+version = "0.1.1"
 description = "Genera cataloghi RDF DCAT-AP IT da portali CKAN"
 requires-python = ">=3.13"
 dependencies = [

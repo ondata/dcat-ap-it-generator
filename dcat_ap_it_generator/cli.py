@@ -89,16 +89,25 @@ def generate(
     max_datasets: int | None = (int(max_datasets_cfg) or None) if max_datasets_cfg is not None else None
     chunk_size_cfg = portal_cfg.get("chunk_size")
     chunk_size: int | None = (int(chunk_size_cfg) or None) if chunk_size_cfg is not None else None
+    timeout: int = int(portal_cfg.get("timeout", 30))
 
     output_path = output or Path(output_cfg.get("path", "output/catalog.ttl"))
 
     org_list = [o.strip() for o in organizations.split(",")] if organizations else []
 
-    from .ckan_client import count_datasets, fetch_all_datasets
+    from .ckan_client import check_portal, count_datasets, fetch_all_datasets
     from .mapper import build_catalog
 
+    # Health check portale
+    ok, msg = check_portal(base_url, api_key, timeout=timeout)
+    if not ok:
+        err_console.print(f"[red]Portale non raggiungibile:[/red] {msg}")
+        raise typer.Exit(1)
+    if verbose:
+        console.print(f"Portale OK: [green]{msg}[/green]")
+
     # Conta dataset totali per progress bar (limitato da max_datasets se impostato)
-    total = count_datasets(base_url, query_template, api_key)
+    total = count_datasets(base_url, query_template, api_key, timeout=timeout)
     if max_datasets is not None:
         total = min(total, max_datasets)
     if verbose:
@@ -117,7 +126,7 @@ def generate(
         transient=not verbose,
     ) as progress:
         task = progress.add_task("Fetching datasets...", total=total or None)
-        for ds in fetch_all_datasets(base_url, query_template, rows_per_page, api_key, max_datasets):
+        for ds in fetch_all_datasets(base_url, query_template, rows_per_page, api_key, max_datasets, timeout=timeout):
             if ds.get("title"):
                 datasets.append(ds)
             else:
