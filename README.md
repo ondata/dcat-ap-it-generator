@@ -7,8 +7,6 @@
 
 > Idea originale di [Daniele Crespi](https://www.linkedin.com/in/danielecrespi/).
 
-> **Nota:** prodotto ancora in fase di test. L'output potrebbe non essere completamente conforme a DCAT-AP IT.
-
 Genera file RDF Turtle conformi a [DCAT-AP IT](https://www.dati.gov.it/sites/default/files/2020-02/DCAT-AP_IT.owl) interrogando qualsiasi portale CKAN via API.
 
 ## Il problema che risolve
