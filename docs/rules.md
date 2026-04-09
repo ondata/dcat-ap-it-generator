@@ -12,11 +12,11 @@ Il file OWL ufficiale dello standard è archiviato in `docs/specs/DCAT-AP_IT.owl
 
 I file sono query SPARQL (`.rq`) in formato `SELECT`. Ogni query individua le violazioni di una singola regola: se restituisce risultati, il grafo non è conforme.
 
-Esistono tre categorie di file, distinguibili dal suffisso:
+Esistono quattro categorie di file, distinguibili dal suffisso:
 
-### `rule-N.rq` — regole originali (105 file)
+### `rule-N.rq` — regole originali attive (73 file)
 
-Regole prelevate direttamente da `daf-semantic-validator` senza modifiche.
+Regole prelevate da `daf-semantic-validator` che corrispondono a vincoli definiti nell'OWL DCAT-AP IT.
 
 ### `rule-N.new.rq` — regole corrette (13 file)
 
@@ -105,25 +105,43 @@ GROUP BY ?s
 HAVING (COUNT(?id) > 1)
 ```
 
+### `rule-N.rq.suspended` — regole sospese (32 file)
+
+Regole originali di `daf-semantic-validator` che verificano proprietà **non presenti nell'OWL DCAT-AP IT** per la classe indicata. Sono state sospese dopo un confronto sistematico con `docs/specs/DCAT-AP_IT.owl`.
+
+Restano nel repository per riferimento ma non vengono caricate dal validator (il CLI filtra i file con suffisso `.suspended`).
+
+Le proprietà sospese per classe:
+
+**Catalog** (8 regole: 23, 34, 35, 36, 99, 138, 140, 141):
+`dct:license`, `dct:rights`, `dct:spatial`, `dct:isPartOf`, `dct:hasPart` — nessuna restrizione OWL su Catalog per queste proprietà.
+
+**Dataset** (12 regole: 63, 77, 100, 103, 104, 150, 151, 152, 154, 155, 156, 157):
+`dcat:landingPage`, `adms:versionNotes`, `dct:accessRights`, `dct:type`, `foaf:page`, `dct:hasVersion`, `dct:provenance`, `dct:relation`, `adms:sample`, `dct:source` — nessuna restrizione OWL su Dataset per queste proprietà.
+
+**Distribution** (12 regole: 91, 92, 105, 106, 107, 108, 109, 110, 159, 160, 161, 162):
+`dcat:mediaType`, `dct:issued`, `spdx:checksum`, `dct:rights`, `adms:status`, `foaf:page`, `dct:language`, `dct:conformsTo` — nessuna restrizione OWL su Distribution per queste proprietà.
+
 ---
 
 ## Come vengono usate
 
-Il comando `dcat-ap-it validate` carica tutti i file `.rq` presenti nella cartella `rules/` (inclusi `.new.rq` e `.added.rq`) ed esegue ogni query sul grafo Turtle prodotto dal comando `generate`.
+Il comando `dcat-ap-it validate` carica tutti i file `.rq` presenti nella cartella `rules/` ed esegue ogni query sul grafo Turtle prodotto dal comando `generate`. I file con suffisso `.suspended` vengono esclusi.
 
 ```python
-rule_files = sorted(f for f in rules_path.glob("*.rq"))
+rule_files = sorted(f for f in rules_path.glob("*.rq") if not f.suffix == ".suspended")
 ```
 
-L'ordinamento numerico garantisce un output riproducibile. Non esiste distinzione di trattamento tra i tre tipi di file a runtime: vengono tutti eseguiti allo stesso modo.
+L'ordinamento numerico garantisce un output riproducibile. Non esiste distinzione di trattamento tra i tipi di file attivi a runtime: vengono tutti eseguiti allo stesso modo.
 
 ---
 
 ## Riepilogo
 
-| Tipo | Conteggio | Provenienza |
-|------|-----------|-------------|
-| `rule-N.rq` | 105 | `daf-semantic-validator` (originale) |
-| `rule-N.new.rq` | 13 | Correzioni di regole originali |
-| `rule-N.added.rq` | 36 | Regole nuove da OWL DCAT-AP IT |
-| **Totale** | **154** | |
+| Tipo | Conteggio | Stato |
+|------|-----------|-------|
+| `rule-N.rq` | 73 | Attive — originali da `daf-semantic-validator`, conformi all'OWL |
+| `rule-N.new.rq` | 13 | Attive — correzioni di regole originali |
+| `rule-N.added.rq` | 36 | Attive — regole nuove da OWL |
+| `rule-N.rq.suspended` | 32 | Sospese — proprietà non presenti nell'OWL |
+| **Attive totali** | **122** | |
