@@ -3,7 +3,14 @@ from pathlib import Path
 from rdflib import Graph, URIRef
 from rdflib.namespace import RDF
 
-from dcat_ap_it_generator.mapper import build_catalog, map_dataset, frequency_uri, language_uris, license_uri
+from dcat_ap_it_generator.mapper import (
+    build_catalog,
+    build_catalog_multi,
+    frequency_uri,
+    language_uris,
+    license_uri,
+    map_dataset,
+)
 from dcat_ap_it_generator.namespaces import DCAT, DCATAPIT, DCT, EU_FREQUENCY, EU_LANGUAGE, FOAF, OWL
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -537,6 +544,206 @@ def test_datetime_naive_no_spurious_tz():
     lit = _literal_date("2024-01-01T12:34:56")
     assert lit is not None
     assert str(lit) == "2024-01-01T12:34:56"
+
+
+# --- Multi-catalog ---
+
+
+def _ds(id_: str, title: str, org_name: str, **extra) -> dict:
+    return {
+        "id": id_,
+        "title": title,
+        "metadata_created": "2024-01-01",
+        "organization": {"id": f"oid-{org_name}", "name": org_name, "title": org_name.title()},
+        "resources": [],
+        **extra,
+    }
+
+
+def test_multi_catalog_emits_aggregator_and_subcatalogs():
+    ds_by_org = {
+        "atm": [_ds("ds-1", "DS1", "atm"), _ds("ds-2", "DS2", "atm")],
+        "camcom": [_ds("ds-3", "DS3", "camcom")],
+    }
+    org_md = {
+        "atm": {"name": "atm", "title": "ATM SpA", "url": "https://www.atm.example/"},
+        "camcom": {"name": "camcom", "title": "Camera di Commercio", "url": "https://camcom.example/"},
+    }
+    g = build_catalog_multi(CONFIG, ds_by_org, BASE_URL, org_md)
+
+    aggregator = URIRef(f"{BASE_URL}/catalog")
+    sub_atm = URIRef("https://www.atm.example")
+    sub_cc = URIRef("https://camcom.example")
+
+    # Aggregator + 2 sub-catalog tutti tipizzati Catalog
+    catalogs = set(g.subjects(RDF.type, DCATAPIT.Catalog))
+    assert aggregator in catalogs
+    assert sub_atm in catalogs
+    assert sub_cc in catalogs
+    assert len(catalogs) == 3
+
+
+def test_multi_catalog_dct_haspart_links_subcatalogs():
+    ds_by_org = {
+        "atm": [_ds("ds-1", "DS1", "atm")],
+        "camcom": [_ds("ds-3", "DS3", "camcom")],
+    }
+    org_md = {
+        "atm": {"name": "atm", "title": "ATM", "url": "https://www.atm.example/"},
+        "camcom": {"name": "camcom", "title": "CC", "url": "https://camcom.example/"},
+    }
+    g = build_catalog_multi(CONFIG, ds_by_org, BASE_URL, org_md)
+    aggregator = URIRef(f"{BASE_URL}/catalog")
+    parts = set(g.objects(aggregator, DCT.hasPart))
+    assert URIRef("https://www.atm.example") in parts
+    assert URIRef("https://camcom.example") in parts
+    assert len(parts) == 2
+
+
+def test_multi_catalog_subcatalog_links_only_own_datasets():
+    ds_by_org = {
+        "atm": [_ds("ds-1", "DS1", "atm"), _ds("ds-2", "DS2", "atm")],
+        "camcom": [_ds("ds-3", "DS3", "camcom")],
+    }
+    org_md = {
+        "atm": {"name": "atm", "url": "https://www.atm.example/"},
+        "camcom": {"name": "camcom", "url": "https://camcom.example/"},
+    }
+    g = build_catalog_multi(CONFIG, ds_by_org, BASE_URL, org_md)
+    sub_atm = URIRef("https://www.atm.example")
+    sub_cc = URIRef("https://camcom.example")
+
+    atm_ds = set(g.objects(sub_atm, DCAT.dataset))
+    cc_ds = set(g.objects(sub_cc, DCAT.dataset))
+
+    assert URIRef(f"{BASE_URL}/dataset/ds-1") in atm_ds
+    assert URIRef(f"{BASE_URL}/dataset/ds-2") in atm_ds
+    assert URIRef(f"{BASE_URL}/dataset/ds-3") not in atm_ds
+    assert URIRef(f"{BASE_URL}/dataset/ds-3") in cc_ds
+    assert len(atm_ds) == 2
+    assert len(cc_ds) == 1
+
+
+def test_multi_catalog_no_dataset_uri_duplication():
+    """Ogni dataset deve apparire una sola volta come soggetto Dataset."""
+    ds_by_org = {
+        "atm": [_ds("ds-1", "DS1", "atm")],
+        "camcom": [_ds("ds-2", "DS2", "camcom")],
+    }
+    g = build_catalog_multi(CONFIG, ds_by_org, BASE_URL, {})
+    datasets = list(g.subjects(RDF.type, DCATAPIT.Dataset))
+    assert len(datasets) == 2
+    assert len(set(datasets)) == 2  # nessun duplicato
+
+
+def test_multi_catalog_subcatalog_uri_from_ckanext_site_field():
+    """ckanext-dcatapit usa `site` invece di `url` per il sito istituzionale."""
+    ds_by_org = {"atm": [_ds("ds-1", "DS1", "atm")]}
+    org_md = {"atm": {"name": "atm", "site": "https://www.atmmessinaspa.it"}}
+    g = build_catalog_multi(CONFIG, ds_by_org, BASE_URL, org_md)
+    assert (URIRef("https://www.atmmessinaspa.it"), RDF.type, DCATAPIT.Catalog) in g
+
+
+def test_multi_catalog_subcatalog_uri_fallback_when_no_org_url():
+    """Senza org.url, l'URI del sub-catalog cade su {base}/catalog/{org_name}."""
+    ds_by_org = {"atm": [_ds("ds-1", "DS1", "atm")]}
+    g = build_catalog_multi(CONFIG, ds_by_org, BASE_URL, {})  # niente org_md
+    expected = URIRef(f"{BASE_URL}/catalog/atm")
+    assert (expected, RDF.type, DCATAPIT.Catalog) in g
+
+
+def test_multi_catalog_agent_dedup_across_subcatalogs():
+    """Stesso publisher su due sub-catalog (ereditato dal config)
+    deve riusare lo stesso BNode agent."""
+    ds_by_org = {
+        "atm": [_ds("ds-1", "DS1", "atm",
+                    publisher_name="Ente Comune", publisher_identifier="ipa-1")],
+        "camcom": [_ds("ds-2", "DS2", "camcom",
+                       publisher_name="Ente Comune", publisher_identifier="ipa-1")],
+    }
+    org_md = {
+        "atm": {"url": "https://www.atm.example/"},
+        "camcom": {"url": "https://camcom.example/"},
+    }
+    g = build_catalog_multi(CONFIG, ds_by_org, BASE_URL, org_md)
+    pub_ds1 = list(g.objects(URIRef(f"{BASE_URL}/dataset/ds-1"), DCT.publisher))
+    pub_ds2 = list(g.objects(URIRef(f"{BASE_URL}/dataset/ds-2"), DCT.publisher))
+    assert pub_ds1[0] == pub_ds2[0]
+
+
+def test_multi_catalog_subcatalog_inherits_publisher_from_config():
+    """Ogni sub-catalog deve avere dct:publisher (obbligatorio OWL),
+    ereditato dal config se non c'è metadato org dedicato."""
+    ds_by_org = {"atm": [_ds("ds-1", "DS1", "atm")]}
+    org_md = {"atm": {"url": "https://www.atm.example/"}}
+    g = build_catalog_multi(CONFIG, ds_by_org, BASE_URL, org_md)
+    sub_atm = URIRef("https://www.atm.example")
+    pubs = list(g.objects(sub_atm, DCT.publisher))
+    assert len(pubs) == 1
+
+
+def test_multi_catalog_collision_when_subcatalog_url_equals_aggregator():
+    """Se org.url coincide con l'aggregator URI, i suoi dataset
+    vengono linkati direttamente all'aggregator (no nodo separato,
+    no duplicazione tipo:Catalog sull'aggregator)."""
+    ds_by_org = {
+        "comune": [_ds("ds-1", "DS1", "comune")],
+        "atm": [_ds("ds-2", "DS2", "atm")],
+    }
+    # comune.url = aggregator URI esatto
+    org_md = {
+        "comune": {"url": f"{BASE_URL}/catalog"},
+        "atm": {"url": "https://www.atm.example/"},
+    }
+    g = build_catalog_multi(CONFIG, ds_by_org, BASE_URL, org_md)
+    aggregator = URIRef(f"{BASE_URL}/catalog")
+    # ds-1 deve essere linkato dall'aggregator
+    direct = set(g.objects(aggregator, DCAT.dataset))
+    assert URIRef(f"{BASE_URL}/dataset/ds-1") in direct
+    # ds-2 sotto sub-catalog ATM
+    sub_atm = URIRef("https://www.atm.example")
+    assert URIRef(f"{BASE_URL}/dataset/ds-2") in set(g.objects(sub_atm, DCAT.dataset))
+    # aggregator NON deve avere dct:hasPart verso se stesso
+    assert aggregator not in set(g.objects(aggregator, DCT.hasPart))
+
+
+def test_multi_catalog_aggregator_links_all_datasets():
+    """Rule 4 DCAT-AP IT: ogni Catalog (incluso aggregator) deve avere dcat:dataset.
+    L'aggregator deve quindi linkare l'unione di tutti i dataset dei sub-catalog."""
+    ds_by_org = {
+        "atm": [_ds("ds-1", "DS1", "atm"), _ds("ds-2", "DS2", "atm")],
+        "camcom": [_ds("ds-3", "DS3", "camcom")],
+    }
+    org_md = {
+        "atm": {"url": "https://www.atm.example/"},
+        "camcom": {"url": "https://camcom.example/"},
+    }
+    g = build_catalog_multi(CONFIG, ds_by_org, BASE_URL, org_md)
+    aggregator = URIRef(f"{BASE_URL}/catalog")
+    agg_ds = set(g.objects(aggregator, DCAT.dataset))
+    assert URIRef(f"{BASE_URL}/dataset/ds-1") in agg_ds
+    assert URIRef(f"{BASE_URL}/dataset/ds-2") in agg_ds
+    assert URIRef(f"{BASE_URL}/dataset/ds-3") in agg_ds
+    assert len(agg_ds) == 3
+
+
+def test_catalog_homepage_typed_as_foaf_document():
+    """Rule 17: foaf:homepage range deve essere foaf:Document."""
+    g = build_catalog(CONFIG, [], BASE_URL)
+    hp = URIRef(BASE_URL)
+    assert (hp, RDF.type, FOAF.Document) in g
+
+
+def test_multi_catalog_serializes_to_valid_turtle():
+    ds_by_org = {
+        "atm": [_ds("ds-1", "DS1", "atm")],
+        "camcom": [_ds("ds-2", "DS2", "camcom")],
+    }
+    g = build_catalog_multi(CONFIG, ds_by_org, BASE_URL, {})
+    ttl = g.serialize(format="turtle")
+    g2 = Graph()
+    g2.parse(data=ttl, format="turtle")
+    assert len(g2) == len(g)
 
 
 def test_different_publishers_not_deduplicated():

@@ -449,63 +449,93 @@ def map_dataset(dataset: dict, base_url: str, graph: Graph, _agent_cache: dict |
     return ds_uri
 
 
-def build_catalog(config: dict, datasets: list[dict], base_url: str) -> Graph:
-    g = Graph()
+def _emit_catalog_node(
+    graph: Graph,
+    cat_uri: URIRef,
+    cat_attrs: dict,
+    agent_cache: dict,
+    *,
+    modified_date: Literal,
+) -> None:
+    """Emette su `cat_uri` tutti gli attributi comuni a un dcatapit:Catalog.
 
-    # Namespace bindings per output leggibile
+    Riusato sia per il catalogo singolo (`build_catalog`) sia per
+    aggregator e sub-catalog in `build_catalog_multi`. Non lega dataset
+    né dct:hasPart: quelli sono responsabilità del chiamante.
+
+    `cat_attrs` accetta le stesse chiavi della sezione `catalog` del config:
+    title, description, issued, language, homepage, publisher_name,
+    publisher_identifier, spatial.
+    """
+    graph.add((cat_uri, RDF.type, DCATAPIT.Catalog))
+    graph.add((cat_uri, RDF.type, DCAT.Catalog))
+
+    title = cat_attrs.get("title")
+    if title:
+        graph.add((cat_uri, DCT.title, Literal(title)))
+
+    description = cat_attrs.get("description")
+    if description:
+        graph.add((cat_uri, DCT.description, Literal(description)))
+
+    issued = _literal_date(cat_attrs.get("issued"))
+    if issued:
+        graph.add((cat_uri, DCT.issued, issued))
+
+    # dct:modified obbligatorio — passato dal chiamante per garantire
+    # coerenza tra aggregator e sub-catalog nello stesso run.
+    graph.add((cat_uri, DCT.modified, modified_date))
+
+    # dcat:themeTaxonomy obbligatorio — vocabolario EU Data Themes
+    graph.add((cat_uri, DCAT.themeTaxonomy,
+               URIRef("http://publications.europa.eu/resource/authority/data-theme")))
+
+    for lang in language_uris(cat_attrs.get("language")):
+        graph.add((cat_uri, DCT.language, lang))
+
+    homepage = cat_attrs.get("homepage")
+    if homepage:
+        hp_uri = URIRef(homepage)
+        # Rule 17: foaf:homepage range = foaf:Document
+        graph.add((hp_uri, RDF.type, FOAF.Document))
+        graph.add((cat_uri, FOAF.homepage, hp_uri))
+
+    pub_name = cat_attrs.get("publisher_name")
+    pub_id = cat_attrs.get("publisher_identifier")
+    if pub_name:
+        publisher = _add_agent(graph, pub_name, pub_id, _cache=agent_cache)
+        graph.add((cat_uri, DCT.publisher, publisher))
+
+    spatial = cat_attrs.get("spatial")
+    if spatial:
+        location = BNode()
+        graph.add((location, RDF.type, DCT.Location))
+        graph.add((location, DCATAPIT.geographicalIdentifier, Literal(spatial)))
+        graph.add((cat_uri, DCT.spatial, location))
+
+
+def _today_literal() -> Literal:
+    from datetime import timezone
+    return Literal(
+        datetime.now(timezone.utc).strftime("%Y-%m-%d"), datatype=XSD.date
+    )
+
+
+def _new_graph() -> Graph:
+    g = Graph()
     for prefix, ns in BINDINGS.items():
         g.bind(prefix, ns)
+    return g
+
+
+def build_catalog(config: dict, datasets: list[dict], base_url: str) -> Graph:
+    g = _new_graph()
 
     cat_cfg = config.get("catalog", {})
     cat_uri = URIRef(cat_cfg.get("uri", base_url))
 
-    g.add((cat_uri, RDF.type, DCATAPIT.Catalog))
-    g.add((cat_uri, RDF.type, DCAT.Catalog))
-
-    title = cat_cfg.get("title")
-    if title:
-        g.add((cat_uri, DCT.title, Literal(title)))
-
-    description = cat_cfg.get("description")
-    if description:
-        g.add((cat_uri, DCT.description, Literal(description)))
-
-    issued = _literal_date(cat_cfg.get("issued"))
-    if issued:
-        g.add((cat_uri, DCT.issued, issued))
-
-    # dct:modified obbligatorio — data di generazione
-    from datetime import timezone
-    g.add((cat_uri, DCT.modified, Literal(
-        datetime.now(timezone.utc).strftime("%Y-%m-%d"), datatype=XSD.date
-    )))
-
-    # dcat:themeTaxonomy obbligatorio — vocabolario EU Data Themes
-    g.add((cat_uri, DCAT.themeTaxonomy,
-           URIRef("http://publications.europa.eu/resource/authority/data-theme")))
-
-    for lang in language_uris(cat_cfg.get("language")):
-        g.add((cat_uri, DCT.language, lang))
-
-    homepage = cat_cfg.get("homepage")
-    if homepage:
-        g.add((cat_uri, FOAF.homepage, URIRef(homepage)))
-
     agent_cache: dict[tuple, BNode] = {}
-
-    pub_name = cat_cfg.get("publisher_name")
-    pub_id = cat_cfg.get("publisher_identifier")
-    if pub_name:
-        publisher = _add_agent(g, pub_name, pub_id, _cache=agent_cache)
-        g.add((cat_uri, DCT.publisher, publisher))
-
-    # Spatial — dal config
-    spatial = cat_cfg.get("spatial")
-    if spatial:
-        location = BNode()
-        g.add((location, RDF.type, DCT.Location))
-        g.add((location, DCATAPIT.geographicalIdentifier, Literal(spatial)))
-        g.add((cat_uri, DCT.spatial, location))
+    _emit_catalog_node(g, cat_uri, cat_cfg, agent_cache, modified_date=_today_literal())
 
     for dataset in datasets:
         ds_uri = map_dataset(dataset, base_url, g, _agent_cache=agent_cache)
@@ -513,6 +543,139 @@ def build_catalog(config: dict, datasets: list[dict], base_url: str) -> Graph:
             g.add((cat_uri, DCAT.dataset, ds_uri))
 
     # LicenseDocument — emetti nodi per le licenze usate nel grafo
+    _add_license_documents(g)
+
+    return g
+
+
+def _org_site(org: dict | None) -> str | None:
+    """Estrae l'URL del sito istituzionale di un'organization CKAN.
+
+    `ckanext-dcatapit` espone il campo come `site`; CKAN core e altri
+    portali usano `url`. Si controllano entrambi nell'ordine.
+    """
+    if not org:
+        return None
+    for key in ("site", "url"):
+        val = (org.get(key) or "").strip()
+        if val.startswith(("http://", "https://")):
+            return val
+    return None
+
+
+def _subcatalog_uri(org: dict | None, org_name: str, base_url: str) -> URIRef:
+    """Calcola l'URI di un sotto-catalogo per organization.
+
+    Preferisce il sito istituzionale dell'organization (`site` o `url`)
+    quando presente e ben formato; altrimenti fallback su
+    `{base_url}/catalog/{org_name}`. Normalizza rimuovendo slash finali
+    per evitare le URI doppie viste in alcuni dump CKAN.
+    """
+    site = _org_site(org)
+    if site:
+        return URIRef(site.rstrip("/"))
+    return URIRef(f"{base_url.rstrip('/')}/catalog/{quote(org_name)}")
+
+
+def _subcatalog_attrs(
+    org: dict | None,
+    org_name: str,
+    cat_cfg: dict,
+) -> dict:
+    """Costruisce gli attributi di un sotto-catalogo a partire dai
+    metadati CKAN dell'organization, con fallback ai valori del config
+    del catalogo principale (per garantire i campi obbligatori OWL).
+    """
+    title = None
+    description = None
+    if org:
+        title = org.get("title") or org.get("display_name")
+        description = org.get("description")
+
+    return {
+        "title": title or org_name,
+        "description": description or cat_cfg.get("description"),
+        # publisher: per default ereditiamo dal catalogo principale,
+        # garantendo che dct:publisher sia sempre presente sul sub-catalog.
+        # In futuro si potrebbe derivarlo da extras dell'org se disponibili.
+        "publisher_name": cat_cfg.get("publisher_name"),
+        "publisher_identifier": cat_cfg.get("publisher_identifier"),
+        "language": cat_cfg.get("language"),
+        "homepage": _org_site(org) or cat_cfg.get("homepage"),
+        "spatial": cat_cfg.get("spatial"),
+    }
+
+
+def build_catalog_multi(
+    config: dict,
+    datasets_by_org: dict[str, list[dict]],
+    base_url: str,
+    org_metadata: dict[str, dict] | None = None,
+) -> Graph:
+    """Costruisce un grafo multi-catalogo: 1 aggregator + N sub-catalog.
+
+    Args:
+        datasets_by_org: mapping org_name → lista di dataset CKAN.
+            Le chiavi vuote ("") raggruppano i dataset senza organization.
+        org_metadata: mapping org_name → dict da `organization_show`.
+            Se mancante per un'org, si ricorre ai fallback.
+
+    Garanzie:
+        - ogni dataset compare una sola volta nel grafo
+        - i BNode publisher/holder sono deduplicati globalmente
+        - i sub-catalog hanno tutti dct:publisher (ereditato dal config
+          se l'org non lo fornisce) per soddisfare i requisiti OWL
+    """
+    g = _new_graph()
+    cat_cfg = config.get("catalog", {})
+    aggregator_uri = URIRef(cat_cfg.get("uri", base_url))
+    today = _today_literal()
+    agent_cache: dict[tuple, BNode] = {}
+    org_metadata = org_metadata or {}
+
+    # Aggregator
+    _emit_catalog_node(g, aggregator_uri, cat_cfg, agent_cache, modified_date=today)
+
+    # Pre-calcolo URIs sub-catalog (deduplicato per URI per evitare collisioni
+    # quando più org puntano alla stessa org.url)
+    subcat_uris: dict[str, URIRef] = {}
+    seen_uris: set[URIRef] = set()
+    for org_name in datasets_by_org:
+        org = org_metadata.get(org_name)
+        uri = _subcatalog_uri(org, org_name, base_url)
+        # In caso di collisione (improbabile ma possibile), forziamo il fallback
+        if uri in seen_uris and uri != aggregator_uri:
+            uri = URIRef(f"{base_url.rstrip('/')}/catalog/{quote(org_name)}")
+        seen_uris.add(uri)
+        subcat_uris[org_name] = uri
+
+    # Emit sub-catalog nodes + dct:hasPart dall'aggregator
+    for org_name, sub_uri in subcat_uris.items():
+        if sub_uri == aggregator_uri:
+            # Edge case: l'org coincide con l'aggregator (es. config.uri ==
+            # org.url). Saltiamo l'emissione del nodo separato e linkiamo
+            # i dataset direttamente all'aggregator.
+            continue
+        org = org_metadata.get(org_name)
+        attrs = _subcatalog_attrs(org, org_name, cat_cfg)
+        _emit_catalog_node(g, sub_uri, attrs, agent_cache, modified_date=today)
+        g.add((aggregator_uri, DCT.hasPart, sub_uri))
+
+    # Mappa dataset una sola volta e li lega al sub-catalog corretto.
+    # L'aggregator linka anche TUTTI i dataset via dcat:dataset (DCAT-AP IT
+    # Rule 4: ogni Catalog deve avere dcat:dataset). Nel caso edge in cui un
+    # sub-catalog coincide con l'aggregator, il link è già presente.
+    for org_name, datasets in datasets_by_org.items():
+        target_uri = subcat_uris[org_name]
+        for dataset in datasets:
+            ds_uri = map_dataset(dataset, base_url, g, _agent_cache=agent_cache)
+            if not ds_uri:
+                continue
+            g.add((target_uri, DCAT.dataset, ds_uri))
+            if target_uri != aggregator_uri:
+                g.add((aggregator_uri, DCAT.dataset, ds_uri))
+
+    # LicenseDocument — emetti una sola volta a fine costruzione
     _add_license_documents(g)
 
     return g
