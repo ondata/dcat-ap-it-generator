@@ -75,7 +75,7 @@ def test_generate_portal_unreachable(mock_check, tmp_path):
 
 @patch("dcat_ap_it_generator.ckan_client.check_portal", return_value=(True, "CKAN 2.10"))
 @patch("dcat_ap_it_generator.ckan_client.count_datasets", return_value=2)
-@patch("dcat_ap_it_generator.ckan_client.fetch_organizations")
+@patch("dcat_ap_it_generator.ckan_client.fetch_all_organizations")
 @patch("dcat_ap_it_generator.ckan_client.fetch_all_datasets")
 def test_generate_multi_catalog(mock_fetch, mock_orgs, mock_count, mock_check, tmp_path):
     ds1 = {

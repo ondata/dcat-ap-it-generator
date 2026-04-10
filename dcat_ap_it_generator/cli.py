@@ -113,7 +113,7 @@ def generate(
         )
         raise typer.Exit(1)
 
-    from .ckan_client import check_portal, count_datasets, fetch_all_datasets, fetch_organizations
+    from .ckan_client import check_portal, count_datasets, fetch_all_datasets, fetch_all_organizations
     from .mapper import build_catalog, build_catalog_multi
 
     # Health check portale
@@ -216,14 +216,11 @@ def generate(
             for d in datasets:
                 datasets_by_org.setdefault(_dataset_org(d), []).append(d)
 
-            # Fetch metadati org in parallelo (riusa _SESSION pooled)
-            org_names_present = [n for n in datasets_by_org.keys() if n]
-            if verbose and org_names_present:
-                console.print(
-                    f"Fetch metadati di [cyan]{len(org_names_present)}[/cyan] organization in parallelo..."
-                )
-            org_metadata = fetch_organizations(
-                base_url, org_names_present, api_key=api_key, timeout=timeout
+            # Fetch metadati di tutte le org con una singola chiamata API
+            if verbose:
+                console.print("Fetch metadati organization...")
+            org_metadata = fetch_all_organizations(
+                base_url, api_key=api_key, timeout=timeout
             )
 
             g = build_catalog_multi(cfg, datasets_by_org, base_url, org_metadata)

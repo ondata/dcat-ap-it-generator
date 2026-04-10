@@ -1,7 +1,6 @@
 import logging
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Generator, Iterable
+from typing import Generator
 
 import requests
 
@@ -161,38 +160,43 @@ def fetch_organization(base_url: str, org_name: str, api_key: str = "", timeout:
     return None
 
 
-def fetch_organizations(
+def fetch_all_organizations(
     base_url: str,
-    org_names: Iterable[str],
     api_key: str = "",
     timeout: int = 30,
-    max_workers: int = 8,
-) -> dict[str, dict | None]:
-    """Fetch metadati di più organization in parallelo.
+) -> dict[str, dict]:
+    """Fetch metadati di tutte le organization con una singola chiamata API.
 
-    Returns: dict org_name → dict (o None se la fetch fallisce).
-    Tollerante: errori sulla singola org non interrompono le altre.
-    Riusa la sessione HTTP esistente per il connection pooling.
+    Usa ``organization_list?all_fields=true`` per ottenere tutti i campi
+    necessari (title, description, site, url …) in un'unica richiesta
+    invece di N chiamate separate a ``organization_show``.
+
+    Returns: dict org_name → dict con i metadati dell'org.
     """
-    names = [n for n in dict.fromkeys(org_names) if n]  # dedup preservando ordine
-    if not names:
-        return {}
+    headers = {}
+    if api_key:
+        headers["Authorization"] = api_key
 
-    results: dict[str, dict | None] = {n: None for n in names}
-    # Limita i worker al numero di org per evitare thread inutili
-    workers = max(1, min(max_workers, len(names)))
-    with ThreadPoolExecutor(max_workers=workers) as ex:
-        futures = {
-            ex.submit(fetch_organization, base_url, name, api_key, timeout): name
-            for name in names
-        }
-        for fut in as_completed(futures):
-            name = futures[fut]
-            try:
-                results[name] = fut.result()
-            except Exception as e:  # pragma: no cover - safety net
-                log.warning("fetch_organizations %s fallita: %s", name, e)
-                results[name] = None
+    api = _api_url(base_url)
+    results: dict[str, dict] = {}
+
+    try:
+        resp = _SESSION.get(
+            f"{api}/organization_list",
+            params={"all_fields": "true", "include_extras": "true", "limit": 1000},
+            headers=headers,
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("success"):
+            for org in data["result"]:
+                name = org.get("name")
+                if name:
+                    results[name] = org
+    except requests.RequestException as e:
+        log.error("Errore fetch organization_list: %s", e)
+
     return results
 
 
