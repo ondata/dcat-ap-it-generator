@@ -1,6 +1,6 @@
 [project]
 name = "dcat-ap-it-generator"
-version = "0.1.4"
+version = "0.1.5"
 description = "Genera cataloghi RDF DCAT-AP IT da qualsiasi portale CKAN, senza plugin"
 readme = "README.md"
 authors = [

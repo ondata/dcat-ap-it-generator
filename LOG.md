@@ -1,5 +1,12 @@
 # LOG
 
+## 2026-04-10
+
+- Feat: modalità multi-catalog (`--multi-catalog` o `portal.multi_catalog: true` in config) — genera 1 aggregator + 1 sub-catalog per organizzazione CKAN con `dct:hasPart` (PR #2, Dennis Angemi)
+- Feat: `portal.multi_catalog: true` leggibile da config YAML (non solo flag CLI)
+- Aggiunto `examples/config-messina.yml` con federazione abilitata
+- Test: 76 test verdi
+
 ## 2026-04-09
 
 - Fix: publisher/rightsHolder BNode deduplicati — stesso agente (name, identifier) riusa lo stesso nodo

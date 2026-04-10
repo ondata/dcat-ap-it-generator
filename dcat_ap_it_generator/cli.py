@@ -99,6 +99,7 @@ def generate(
 
     output_path = output or Path(output_cfg.get("path", "output/catalog.ttl"))
 
+    multi_catalog = multi_catalog or bool(portal_cfg.get("multi_catalog", False))
     org_list = [o.strip() for o in organizations.split(",")] if organizations else []
 
     if multi_catalog and org_list:
