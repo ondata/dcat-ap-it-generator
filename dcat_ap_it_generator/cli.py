@@ -62,6 +62,11 @@ def generate(
         "--organizations",
         help="Filtra per org (comma-separated). Genera un file per org.",
     ),
+    multi_catalog: bool = typer.Option(
+        False,
+        "--multi-catalog",
+        help="Produce 1 catalogo aggregator + 1 sub-catalog per organization (dct:hasPart).",
+    ),
 ) -> None:
     """Genera un file Turtle DCAT-AP IT da un portale CKAN.
 
@@ -70,6 +75,7 @@ def generate(
       dcat-ap-it generate --config config.yml --output /tmp/catalog.ttl
       dcat-ap-it generate --config config.yml --dry-run
       dcat-ap-it generate --config config.yml --organizations pat,comune-trento
+      dcat-ap-it generate --config config.yml --multi-catalog
     """
     if verbose:
         console.print(figlet_format("DCAT-AP IT", font="slant"), style="bold cyan")
@@ -95,8 +101,20 @@ def generate(
 
     org_list = [o.strip() for o in organizations.split(",")] if organizations else []
 
-    from .ckan_client import check_portal, count_datasets, fetch_all_datasets
-    from .mapper import build_catalog
+    if multi_catalog and org_list:
+        err_console.print(
+            "[red]Error:[/red] --multi-catalog e --organizations sono mutuamente esclusivi"
+        )
+        raise typer.Exit(1)
+    if multi_catalog and chunk_size:
+        err_console.print(
+            "[red]Error:[/red] --multi-catalog non è compatibile con portal.chunk_size "
+            "(modalità streaming a chunk)"
+        )
+        raise typer.Exit(1)
+
+    from .ckan_client import check_portal, count_datasets, fetch_all_datasets, fetch_all_organizations
+    from .mapper import build_catalog, build_catalog_multi
 
     # Health check portale
     ok, msg = check_portal(base_url, api_key, timeout=timeout)
@@ -182,8 +200,8 @@ def generate(
         raise typer.Exit(0)
 
     if not stream_chunks:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         if org_list:
-            output_path.parent.mkdir(parents=True, exist_ok=True)
             for org in org_list:
                 org_datasets = [d for d in datasets if _dataset_org(d) == org]
                 g = build_catalog(cfg, org_datasets, base_url)
@@ -192,9 +210,28 @@ def generate(
                 n_dist = sum(len(d.get("resources") or []) for d in org_datasets)
                 if verbose:
                     console.print(f"  [green]✓[/green] {org_path} — {len(org_datasets)} dataset, {n_dist} distribuzioni")
+        elif multi_catalog:
+            # Raggruppamento O(N) per org
+            datasets_by_org: dict[str, list[dict]] = {}
+            for d in datasets:
+                datasets_by_org.setdefault(_dataset_org(d), []).append(d)
+
+            # Fetch metadati di tutte le org con una singola chiamata API
+            if verbose:
+                console.print("Fetch metadati organization...")
+            org_metadata = fetch_all_organizations(
+                base_url, api_key=api_key, timeout=timeout
+            )
+
+            g = build_catalog_multi(cfg, datasets_by_org, base_url, org_metadata)
+            g.serialize(destination=str(output_path), format="turtle")
+            if verbose:
+                console.print(
+                    f"  [green]✓[/green] {output_path} — "
+                    f"1 aggregator + {sum(1 for n in datasets_by_org if n)} sub-catalog"
+                )
         else:
             g = build_catalog(cfg, datasets, base_url)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
             g.serialize(destination=str(output_path), format="turtle")
 
         n_total_datasets = len(datasets)

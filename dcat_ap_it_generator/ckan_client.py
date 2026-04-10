@@ -160,6 +160,46 @@ def fetch_organization(base_url: str, org_name: str, api_key: str = "", timeout:
     return None
 
 
+def fetch_all_organizations(
+    base_url: str,
+    api_key: str = "",
+    timeout: int = 30,
+) -> dict[str, dict]:
+    """Fetch metadati di tutte le organization con una singola chiamata API.
+
+    Usa ``organization_list?all_fields=true`` per ottenere tutti i campi
+    necessari (title, description, site, url …) in un'unica richiesta
+    invece di N chiamate separate a ``organization_show``.
+
+    Returns: dict org_name → dict con i metadati dell'org.
+    """
+    headers = {}
+    if api_key:
+        headers["Authorization"] = api_key
+
+    api = _api_url(base_url)
+    results: dict[str, dict] = {}
+
+    try:
+        resp = _SESSION.get(
+            f"{api}/organization_list",
+            params={"all_fields": "true", "include_extras": "true", "limit": 1000},
+            headers=headers,
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("success"):
+            for org in data["result"]:
+                name = org.get("name")
+                if name:
+                    results[name] = org
+    except requests.RequestException as e:
+        log.error("Errore fetch organization_list: %s", e)
+
+    return results
+
+
 def count_datasets(
     base_url: str,
     query_template: str = "",
