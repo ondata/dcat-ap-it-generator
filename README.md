@@ -2,6 +2,7 @@
 [![GitHub](https://img.shields.io/badge/github-ondata%2Fdcat--ap--it--generator-blue?logo=github)](https://github.com/ondata/dcat-ap-it-generator)
 [![deepwiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ondata/dcat-ap-it-generator)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Newsletter](https://img.shields.io/badge/newsletter-ondata-FF6719?logo=substack)](https://ondata.substack.com/)
 
 # DCAT-AP IT Generator
 
