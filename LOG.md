@@ -2,6 +2,10 @@
 
 ## 2026-04-12
 
+- Fix: rimossa `dct:description` dalle distribuzioni datastore (testo ereditato menzionava il formato originale, es. "File CSV", creando conflitto su distribuzioni TSV/JSON/XML), bump v0.1.7
+
+## 2026-04-12 (v0.1.6)
+
 - Feat: `portal.datastore_distributions: true` — aggiunge distribuzioni DCAT per CSV/TSV/JSON/XML da endpoint `/datastore/dump/` per ogni resource con `datastore_active=True`, saltando i formati già presenti come resource nel dataset; `dcat:accessURL` punta alla pagina resource CKAN; `dct:description` ereditata dalla resource o generata automaticamente
 - Aggiunto `datastore_distributions: true` in `examples/config-messina.yml`
 - Test: 63 test verdi (8 nuovi per la feature datastore)
