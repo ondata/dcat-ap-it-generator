@@ -202,13 +202,10 @@ def map_datastore_distributions(
         dist_uri = URIRef(f"{base}/resource/{quote(res_id)}/datastore/{fmt.lower()}")
         dump_url = URIRef(f"{base}/datastore/dump/{quote(res_id)}?format={fmt.lower()}&bom=true")
 
-        description = _clean_str(resource.get("description")) or f"Distribuzione {fmt} generata dal datastore CKAN"
-
         graph.add((dist_uri, RDF.type, DCATAPIT.Distribution))
         graph.add((dist_uri, RDF.type, DCAT.Distribution))
         res_name = resource.get("name") or fmt
         graph.add((dist_uri, DCT.title, Literal(f"{res_name} ({fmt})")))
-        graph.add((dist_uri, DCT.description, Literal(description)))
         graph.add((dist_uri, DCAT.downloadURL, dump_url))
         graph.add((dist_uri, DCAT.accessURL, access_url))
         graph.add((dist_uri, DCT["format"], EU_FILE_TYPE[fmt]))

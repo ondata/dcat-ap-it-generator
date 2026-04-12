@@ -833,38 +833,6 @@ def test_datastore_distributions_download_url_format():
     assert f"{BASE_URL}/datastore/dump/res-1?format=tsv&bom=true" in all_download_urls
 
 
-def test_datastore_distributions_description_inherited():
-    """Se la resource ha descrizione, le distribuzioni datastore la ereditano."""
-    ds = {
-        "id": "pkg-1",
-        "title": "Dataset Datastore",
-        "metadata_created": "2024-01-01",
-        "resources": [{"id": "res-1", "package_id": "pkg-1", "format": "CSV",
-                        "url": "http://example.com/data.csv", "datastore_active": True,
-                        "description": "Dati alberi comunali"}],
-    }
-    cfg = {**CONFIG, "portal": {**CONFIG.get("portal", {}), "datastore_distributions": True}}
-    g = build_catalog(cfg, [ds], BASE_URL)
-    ds_uri = URIRef(f"{BASE_URL}/dataset/pkg-1")
-    datastore_dists = [d for d in g.objects(ds_uri, DCAT.distribution) if "/datastore/" in str(d)]
-    for d in datastore_dists:
-        descs = list(g.objects(d, DCT.description))
-        assert len(descs) == 1
-        assert str(descs[0]) == "Dati alberi comunali"
-
-
-def test_datastore_distributions_description_fallback():
-    """Senza descrizione nella resource, usa testo automatico."""
-    ds = _ds_datastore("CSV", True)
-    cfg = {**CONFIG, "portal": {**CONFIG.get("portal", {}), "datastore_distributions": True}}
-    g = build_catalog(cfg, [ds], BASE_URL)
-    ds_uri = URIRef(f"{BASE_URL}/dataset/pkg-1")
-    datastore_dists = [d for d in g.objects(ds_uri, DCAT.distribution) if "/datastore/" in str(d)]
-    for d in datastore_dists:
-        descs = list(g.objects(d, DCT.description))
-        assert len(descs) == 1
-        assert "datastore CKAN" in str(descs[0])
-
 
 def test_datastore_distributions_title_includes_resource_name():
     """dct:title deve essere '{resource_name} ({fmt})'."""
