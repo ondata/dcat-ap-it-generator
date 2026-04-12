@@ -178,6 +178,47 @@ def _distribution_uri(base_url: str, resource_id: str) -> URIRef:
     return URIRef(f"{base_url.rstrip('/')}/resource/{quote(resource_id)}")
 
 
+_DATASTORE_FORMATS = ["CSV", "TSV", "JSON", "XML"]
+
+
+def map_datastore_distributions(
+    resource: dict,
+    dataset_uri: URIRef,
+    graph: Graph,
+    existing_formats: set[str],
+) -> None:
+    """Aggiunge distribuzioni per i formati datastore non già presenti come resource."""
+    res_id = resource.get("id")
+    dataset_id = resource.get("package_id")
+    if not res_id or not dataset_id:
+        return
+
+    base = str(dataset_uri).rsplit("/dataset/", 1)[0]
+    access_url = URIRef(f"{base}/dataset/{quote(dataset_id)}/resource/{quote(res_id)}")
+
+    for fmt in _DATASTORE_FORMATS:
+        if fmt in existing_formats:
+            continue
+        dist_uri = URIRef(f"{base}/resource/{quote(res_id)}/datastore/{fmt.lower()}")
+        dump_url = URIRef(f"{base}/datastore/dump/{quote(res_id)}?format={fmt.lower()}&bom=true")
+
+        description = _clean_str(resource.get("description")) or f"Distribuzione {fmt} generata dal datastore CKAN"
+
+        graph.add((dist_uri, RDF.type, DCATAPIT.Distribution))
+        graph.add((dist_uri, RDF.type, DCAT.Distribution))
+        res_name = resource.get("name") or fmt
+        graph.add((dist_uri, DCT.title, Literal(f"{res_name} ({fmt})")))
+        graph.add((dist_uri, DCT.description, Literal(description)))
+        graph.add((dist_uri, DCAT.downloadURL, dump_url))
+        graph.add((dist_uri, DCAT.accessURL, access_url))
+        graph.add((dist_uri, DCT["format"], EU_FILE_TYPE[fmt]))
+
+        if resource.get("license_type"):
+            graph.add((dist_uri, DCT.license, URIRef(resource["license_type"])))
+
+        graph.add((dataset_uri, DCAT.distribution, dist_uri))
+
+
 def map_distribution(resource: dict, dataset_uri: URIRef, graph: Graph) -> URIRef | None:
     res_id = resource.get("id")
     if not res_id:
@@ -322,7 +363,7 @@ def _parse_temporal_coverage(raw: str | None) -> tuple[Literal | None, Literal |
     )
 
 
-def map_dataset(dataset: dict, base_url: str, graph: Graph, _agent_cache: dict | None = None) -> URIRef | None:
+def map_dataset(dataset: dict, base_url: str, graph: Graph, _agent_cache: dict | None = None, datastore_distributions: bool = False) -> URIRef | None:
     ds_id = dataset.get("id")
     title = dataset.get("title")
     if not ds_id or not title:
@@ -443,8 +484,12 @@ def map_dataset(dataset: dict, base_url: str, graph: Graph, _agent_cache: dict |
         graph.add((ds_uri, DCT.license, lic))
 
     # Distributions
-    for resource in dataset.get("resources") or []:
+    resources = dataset.get("resources") or []
+    existing_formats = {r.get("format", "").upper() for r in resources}
+    for resource in resources:
         map_distribution(resource, ds_uri, graph)
+        if datastore_distributions and resource.get("datastore_active"):
+            map_datastore_distributions(resource, ds_uri, graph, existing_formats)
 
     return ds_uri
 
@@ -533,12 +578,13 @@ def build_catalog(config: dict, datasets: list[dict], base_url: str) -> Graph:
 
     cat_cfg = config.get("catalog", {})
     cat_uri = URIRef(cat_cfg.get("uri", base_url))
+    datastore_dist = bool(config.get("portal", {}).get("datastore_distributions", False))
 
     agent_cache: dict[tuple, BNode] = {}
     _emit_catalog_node(g, cat_uri, cat_cfg, agent_cache, modified_date=_today_literal())
 
     for dataset in datasets:
-        ds_uri = map_dataset(dataset, base_url, g, _agent_cache=agent_cache)
+        ds_uri = map_dataset(dataset, base_url, g, _agent_cache=agent_cache, datastore_distributions=datastore_dist)
         if ds_uri:
             g.add((cat_uri, DCAT.dataset, ds_uri))
 
@@ -632,6 +678,7 @@ def build_catalog_multi(
     today = _today_literal()
     agent_cache: dict[tuple, BNode] = {}
     org_metadata = org_metadata or {}
+    datastore_dist = bool(config.get("portal", {}).get("datastore_distributions", False))
 
     # Aggregator
     _emit_catalog_node(g, aggregator_uri, cat_cfg, agent_cache, modified_date=today)
@@ -668,7 +715,7 @@ def build_catalog_multi(
     for org_name, datasets in datasets_by_org.items():
         target_uri = subcat_uris[org_name]
         for dataset in datasets:
-            ds_uri = map_dataset(dataset, base_url, g, _agent_cache=agent_cache)
+            ds_uri = map_dataset(dataset, base_url, g, _agent_cache=agent_cache, datastore_distributions=datastore_dist)
             if not ds_uri:
                 continue
             g.add((target_uri, DCAT.dataset, ds_uri))

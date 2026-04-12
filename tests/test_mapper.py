@@ -746,6 +746,160 @@ def test_multi_catalog_serializes_to_valid_turtle():
     assert len(g2) == len(g)
 
 
+# --- datastore_distributions ---
+
+def _ds_datastore(res_format: str, datastore_active: bool, package_id: str = "pkg-1") -> dict:
+    return {
+        "id": "pkg-1",
+        "title": "Dataset Datastore",
+        "metadata_created": "2024-01-01",
+        "resources": [{
+            "id": "res-1",
+            "package_id": package_id,
+            "format": res_format,
+            "url": f"http://example.com/data.{res_format.lower()}",
+            "datastore_active": datastore_active,
+        }],
+    }
+
+
+def test_datastore_distributions_adds_missing_formats():
+    """Con datastore_active=True e formato CSV, devono essere aggiunte TSV, JSON, XML."""
+    from dcat_ap_it_generator.namespaces import EU_FILE_TYPE
+    ds = _ds_datastore("CSV", True)
+    cfg = {**CONFIG, "portal": {**CONFIG.get("portal", {}), "datastore_distributions": True}}
+    g = build_catalog(cfg, [ds], BASE_URL)
+    ds_uri = URIRef(f"{BASE_URL}/dataset/pkg-1")
+    dists = set(g.objects(ds_uri, DCAT.distribution))
+    # 1 originale (CSV) + 3 datastore (TSV, JSON, XML)
+    assert len(dists) == 4
+    fmt_uris = {str(o) for d in dists for o in g.objects(d, DCT["format"])}
+    assert str(EU_FILE_TYPE["TSV"]) in fmt_uris
+    assert str(EU_FILE_TYPE["JSON"]) in fmt_uris
+    assert str(EU_FILE_TYPE["XML"]) in fmt_uris
+
+
+def test_datastore_distributions_skips_existing_format():
+    """Se JSON è già una resource, la distribuzione datastore JSON non deve essere aggiunta."""
+    from dcat_ap_it_generator.namespaces import EU_FILE_TYPE
+    ds = {
+        "id": "pkg-2",
+        "title": "Dataset Con JSON",
+        "metadata_created": "2024-01-01",
+        "resources": [
+            {"id": "res-csv", "package_id": "pkg-2", "format": "CSV", "url": "http://example.com/data.csv", "datastore_active": True},
+            {"id": "res-json", "package_id": "pkg-2", "format": "JSON", "url": "http://example.com/data.json", "datastore_active": False},
+        ],
+    }
+    cfg = {**CONFIG, "portal": {**CONFIG.get("portal", {}), "datastore_distributions": True}}
+    g = build_catalog(cfg, [ds], BASE_URL)
+    ds_uri = URIRef(f"{BASE_URL}/dataset/pkg-2")
+    dists = set(g.objects(ds_uri, DCAT.distribution))
+    # 2 originali (CSV, JSON) + 2 datastore (TSV, XML) — JSON già presente
+    assert len(dists) == 4
+    fmt_uris = {str(o) for d in dists for o in g.objects(d, DCT["format"])}
+    assert str(EU_FILE_TYPE["JSON"]) in fmt_uris  # da risorsa originale
+    assert str(EU_FILE_TYPE["TSV"]) in fmt_uris
+    assert str(EU_FILE_TYPE["XML"]) in fmt_uris
+
+
+def test_datastore_distributions_disabled_by_default():
+    """Senza datastore_distributions nel config, nessuna distribuzione extra."""
+    ds = _ds_datastore("CSV", True)
+    g = build_catalog(CONFIG, [ds], BASE_URL)
+    ds_uri = URIRef(f"{BASE_URL}/dataset/pkg-1")
+    dists = list(g.objects(ds_uri, DCAT.distribution))
+    assert len(dists) == 1
+
+
+def test_datastore_distributions_not_added_when_inactive():
+    """Con datastore_active=False non deve essere aggiunta nessuna distribuzione extra."""
+    ds = _ds_datastore("CSV", False)
+    cfg = {**CONFIG, "portal": {**CONFIG.get("portal", {}), "datastore_distributions": True}}
+    g = build_catalog(cfg, [ds], BASE_URL)
+    ds_uri = URIRef(f"{BASE_URL}/dataset/pkg-1")
+    dists = list(g.objects(ds_uri, DCAT.distribution))
+    assert len(dists) == 1
+
+
+def test_datastore_distributions_download_url_format():
+    """Download URL deve usare il formato corretto con ?format=tsv&bom=true."""
+    ds = _ds_datastore("CSV", True)
+    cfg = {**CONFIG, "portal": {**CONFIG.get("portal", {}), "datastore_distributions": True}}
+    g = build_catalog(cfg, [ds], BASE_URL)
+    ds_uri = URIRef(f"{BASE_URL}/dataset/pkg-1")
+    dists = set(g.objects(ds_uri, DCAT.distribution))
+    all_download_urls = {str(o) for d in dists for o in g.objects(d, DCAT.downloadURL)}
+    assert f"{BASE_URL}/datastore/dump/res-1?format=tsv&bom=true" in all_download_urls
+
+
+def test_datastore_distributions_description_inherited():
+    """Se la resource ha descrizione, le distribuzioni datastore la ereditano."""
+    ds = {
+        "id": "pkg-1",
+        "title": "Dataset Datastore",
+        "metadata_created": "2024-01-01",
+        "resources": [{"id": "res-1", "package_id": "pkg-1", "format": "CSV",
+                        "url": "http://example.com/data.csv", "datastore_active": True,
+                        "description": "Dati alberi comunali"}],
+    }
+    cfg = {**CONFIG, "portal": {**CONFIG.get("portal", {}), "datastore_distributions": True}}
+    g = build_catalog(cfg, [ds], BASE_URL)
+    ds_uri = URIRef(f"{BASE_URL}/dataset/pkg-1")
+    datastore_dists = [d for d in g.objects(ds_uri, DCAT.distribution) if "/datastore/" in str(d)]
+    for d in datastore_dists:
+        descs = list(g.objects(d, DCT.description))
+        assert len(descs) == 1
+        assert str(descs[0]) == "Dati alberi comunali"
+
+
+def test_datastore_distributions_description_fallback():
+    """Senza descrizione nella resource, usa testo automatico."""
+    ds = _ds_datastore("CSV", True)
+    cfg = {**CONFIG, "portal": {**CONFIG.get("portal", {}), "datastore_distributions": True}}
+    g = build_catalog(cfg, [ds], BASE_URL)
+    ds_uri = URIRef(f"{BASE_URL}/dataset/pkg-1")
+    datastore_dists = [d for d in g.objects(ds_uri, DCAT.distribution) if "/datastore/" in str(d)]
+    for d in datastore_dists:
+        descs = list(g.objects(d, DCT.description))
+        assert len(descs) == 1
+        assert "datastore CKAN" in str(descs[0])
+
+
+def test_datastore_distributions_title_includes_resource_name():
+    """dct:title deve essere '{resource_name} ({fmt})'."""
+    ds = {
+        "id": "pkg-1",
+        "title": "Dataset Datastore",
+        "metadata_created": "2024-01-01",
+        "resources": [{"id": "res-1", "package_id": "pkg-1", "format": "CSV",
+                        "url": "http://example.com/data.csv", "datastore_active": True,
+                        "name": "Dati strade 2024"}],
+    }
+    cfg = {**CONFIG, "portal": {**CONFIG.get("portal", {}), "datastore_distributions": True}}
+    g = build_catalog(cfg, [ds], BASE_URL)
+    ds_uri = URIRef(f"{BASE_URL}/dataset/pkg-1")
+    datastore_dists = [d for d in g.objects(ds_uri, DCAT.distribution) if "/datastore/" in str(d)]
+    titles = {str(o) for d in datastore_dists for o in g.objects(d, DCT.title)}
+    assert "Dati strade 2024 (TSV)" in titles
+    assert "Dati strade 2024 (JSON)" in titles
+    assert "Dati strade 2024 (XML)" in titles
+
+
+def test_datastore_distributions_access_url_is_resource_page():
+    """Access URL deve puntare alla pagina resource CKAN."""
+    ds = _ds_datastore("CSV", True)
+    cfg = {**CONFIG, "portal": {**CONFIG.get("portal", {}), "datastore_distributions": True}}
+    g = build_catalog(cfg, [ds], BASE_URL)
+    ds_uri = URIRef(f"{BASE_URL}/dataset/pkg-1")
+    dists = set(g.objects(ds_uri, DCAT.distribution))
+    datastore_dists = [d for d in dists if "/datastore/" in str(d)]
+    for d in datastore_dists:
+        access_urls = list(g.objects(d, DCAT.accessURL))
+        assert len(access_urls) == 1
+        assert str(access_urls[0]) == f"{BASE_URL}/dataset/pkg-1/resource/res-1"
+
+
 def test_different_publishers_not_deduplicated():
     """Due dataset con publisher diversi devono avere BNode distinti."""
     ds1 = {

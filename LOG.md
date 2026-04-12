@@ -1,5 +1,12 @@
 # LOG
 
+## 2026-04-12
+
+- Feat: `portal.datastore_distributions: true` — aggiunge distribuzioni DCAT per CSV/TSV/JSON/XML da endpoint `/datastore/dump/` per ogni resource con `datastore_active=True`, saltando i formati già presenti come resource nel dataset; `dcat:accessURL` punta alla pagina resource CKAN; `dct:description` ereditata dalla resource o generata automaticamente
+- Aggiunto `datastore_distributions: true` in `examples/config-messina.yml`
+- Test: 63 test verdi (8 nuovi per la feature datastore)
+- Bump v0.1.6
+
 ## 2026-04-10
 
 - Feat: modalità multi-catalog (`--multi-catalog` o `portal.multi_catalog: true` in config) — genera 1 aggregator + 1 sub-catalog per organizzazione CKAN con `dct:hasPart` (PR #2, Dennis Angemi)
