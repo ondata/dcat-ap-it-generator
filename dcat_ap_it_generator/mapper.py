@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from datetime import datetime
 from urllib.parse import quote
 
@@ -13,6 +14,53 @@ from dcat_ap_it_generator.namespaces import (
 )
 
 log = logging.getLogger(__name__)
+
+try:
+    # Predicato usato dal serializzatore Turtle stesso: è l'unico controllo
+    # garantito allineato a ciò che rdflib accetta in fase di scrittura.
+    from rdflib.term import _is_valid_uri as _rdflib_is_valid_uri
+except ImportError:  # pragma: no cover — rdflib ha rinominato/rimosso il simbolo
+    _INVALID_URI_CHARS = re.compile(r'[\x00-\x20<>"{}|\\^`]')
+
+    def _rdflib_is_valid_uri(uri: str) -> bool:
+        return not _INVALID_URI_CHARS.search(uri)
+
+
+# Caratteri che rdflib rifiuta in un URI ma che si possono percent-encodare
+# senza cambiare il significato dell'indirizzo (spazi, <, >, ", {, }, |, \, ^, `).
+_SAFE_URI_CHARS = "!#$%&'()*+,-./:;=?@[]_~"
+
+
+def _safe_uri(value: str | None, context: str = "") -> URIRef | None:
+    """Restituisce un URIRef serializzabile, o None se il valore non è recuperabile.
+
+    Prima prova il valore così com'è; poi tenta un percent-encoding dei soli
+    caratteri illegali (preservando quelli già encodati); infine rinuncia.
+    Serve a evitare che un singolo campo CKAN con testo libero faccia fallire
+    la serializzazione dell'intero catalogo (issue #3).
+    """
+    if not value:
+        return None
+    value = str(value).strip()
+    if not value:
+        return None
+
+    if _rdflib_is_valid_uri(value):
+        return URIRef(value)
+
+    # Si normalizza solo ciò che è già un indirizzo web: un testo libero che
+    # contiene per caso un ":" non deve diventare un URI con schema inventato.
+    # I `mailto:` restano esclusi: percent-encodare uno spazio dentro un
+    # indirizzo email produce un URI valido ma un destinatario inesistente.
+    if value.startswith(("http://", "https://")):
+        normalized = quote(value, safe=_SAFE_URI_CHARS)
+        if _rdflib_is_valid_uri(normalized):
+            log.warning("URI normalizzato%s: %r → %r", context, value, normalized)
+            return URIRef(normalized)
+
+    log.warning("URI non valido, scartato%s: %r", context, value)
+    return None
+
 
 _LICENSES: dict[str, str] = {}
 _LICENSE_IDS: dict[str, str] = {}
@@ -210,8 +258,9 @@ def map_datastore_distributions(
         graph.add((dist_uri, DCAT.accessURL, access_url))
         graph.add((dist_uri, DCT["format"], EU_FILE_TYPE[fmt]))
 
-        if resource.get("license_type"):
-            graph.add((dist_uri, DCT.license, URIRef(resource["license_type"])))
+        lic = _safe_uri(resource.get("license_type"), context=f" (license, resource {res_id})")
+        if lic:
+            graph.add((dist_uri, DCT.license, lic))
 
         graph.add((dataset_uri, DCAT.distribution, dist_uri))
 
@@ -235,10 +284,20 @@ def map_distribution(resource: dict, dataset_uri: URIRef, graph: Graph) -> URIRe
     if description:
         graph.add((dist_uri, DCT.description, Literal(description)))
 
-    url = resource.get("url")
+    # dcat:accessURL è obbligatoria: se l'url della risorsa non è utilizzabile
+    # si ripiega sulla pagina CKAN della risorsa. downloadURL invece si scarta.
+    url = _safe_uri(resource.get("url"), context=f" (distribution {res_id})")
     if url:
-        graph.add((dist_uri, DCAT.downloadURL, URIRef(url)))
-        graph.add((dist_uri, DCAT.accessURL, URIRef(url)))
+        graph.add((dist_uri, DCAT.downloadURL, url))
+        graph.add((dist_uri, DCAT.accessURL, url))
+    else:
+        dataset_id = resource.get("package_id")
+        fallback = (
+            URIRef(f"{base}/dataset/{quote(dataset_id)}/resource/{quote(res_id)}")
+            if dataset_id
+            else dataset_uri  # senza package_id resta la pagina del dataset
+        )
+        graph.add((dist_uri, DCAT.accessURL, fallback))
 
     fmt = format_uri(resource.get("format"))
     if fmt:
@@ -259,8 +318,9 @@ def map_distribution(resource: dict, dataset_uri: URIRef, graph: Graph) -> URIRe
     if modified:
         graph.add((dist_uri, DCT.modified, modified))
 
-    if resource.get("license_type"):
-        graph.add((dist_uri, DCT.license, URIRef(resource["license_type"])))
+    lic = _safe_uri(resource.get("license_type"), context=f" (license, resource {res_id})")
+    if lic:
+        graph.add((dist_uri, DCT.license, lic))
 
     # Collega dataset → distribution
     graph.add((dataset_uri, DCAT.distribution, dist_uri))
@@ -301,7 +361,12 @@ def _add_contact_point(graph: Graph, dataset: dict, base_url: str) -> URIRef | N
     org_id = org.get("id")
     if not org_id:
         return None
-    org_uri = URIRef(f"{base_url.rstrip('/')}/organization/{org_id}/{quote(email, safe='')}")
+    # vcard:hasEmail è obbligatoria: con un'email non utilizzabile come URI
+    # non si emette l'Organization, come già si fa quando l'email manca.
+    email_uri = _safe_uri(f"mailto:{email}", context=f" (hasEmail, org {org_id})")
+    if email_uri is None:
+        return None
+    org_uri = URIRef(f"{base_url.rstrip('/')}/organization/{quote(str(org_id))}/{quote(email, safe='')}")
     # Se già dichiarata, non riaggiungiamo (vcard:hasEmail max cardinality = 1)
     if (org_uri, RDF.type, DCATAPIT.Organization) in graph:
         return org_uri
@@ -311,7 +376,7 @@ def _add_contact_point(graph: Graph, dataset: dict, base_url: str) -> URIRef | N
     name = org.get("title") or org.get("name")
     if name:
         graph.add((org_uri, VCARD.fn, Literal(name)))
-    graph.add((org_uri, VCARD.hasEmail, URIRef(f"mailto:{email}")))
+    graph.add((org_uri, VCARD.hasEmail, email_uri))
     graph.add((org_uri, VCARD.hasURL, URIRef(base_url.rstrip("/"))))
     return org_uri
 
@@ -388,9 +453,12 @@ def map_dataset(dataset: dict, base_url: str, graph: Graph, _agent_cache: dict |
         if name:
             graph.add((ds_uri, DCAT.keyword, Literal(name)))
 
-    # Landing page — obbligatoria, tipizzata foaf:Document (OWL Rule 63)
-    url = dataset.get("url") or f"{base_url.rstrip('/')}/dataset/{ds_id}"
-    landing = URIRef(url)
+    # Landing page — obbligatoria, tipizzata foaf:Document (OWL Rule 63).
+    # Se il campo `url` CKAN contiene testo libero si ripiega sulla pagina del
+    # dataset: la proprietà è obbligatoria, quindi non si può scartare.
+    landing = _safe_uri(dataset.get("url"), context=f" (landingPage, dataset {ds_id})")
+    if landing is None:
+        landing = URIRef(f"{base_url.rstrip('/')}/dataset/{quote(ds_id)}")
     graph.add((landing, RDF.type, FOAF.Document))
     graph.add((ds_uri, DCAT.landingPage, landing))
 
@@ -535,9 +603,10 @@ def _emit_catalog_node(
     for lang in language_uris(cat_attrs.get("language")):
         graph.add((cat_uri, DCT.language, lang))
 
-    homepage = cat_attrs.get("homepage")
-    if homepage:
-        hp_uri = URIRef(homepage)
+    # La homepage dei sotto-cataloghi arriva dal campo `site` dell'organization
+    # CKAN, quindi va validata come ogni altro dato esterno.
+    hp_uri = _safe_uri(cat_attrs.get("homepage"), context=f" (homepage, catalog {cat_uri})")
+    if hp_uri:
         # Rule 17: foaf:homepage range = foaf:Document
         graph.add((hp_uri, RDF.type, FOAF.Document))
         graph.add((cat_uri, FOAF.homepage, hp_uri))
@@ -616,7 +685,9 @@ def _subcatalog_uri(org: dict | None, org_name: str, base_url: str) -> URIRef:
     """
     site = _org_site(org)
     if site:
-        return URIRef(site.rstrip("/"))
+        site_uri = _safe_uri(site.rstrip("/"), context=f" (subcatalog, org {org_name})")
+        if site_uri:
+            return site_uri
     return URIRef(f"{base_url.rstrip('/')}/catalog/{quote(org_name)}")
 
 

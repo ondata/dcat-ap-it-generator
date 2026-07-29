@@ -92,6 +92,10 @@ dcat-ap-it validate output/catalog.ttl
 dcat-ap-it validate output/catalog.ttl --errors-only
 ```
 
+### Validazione ufficiale AgID
+
+Il comando `validate` serve a controllare il file in locale, prima di pubblicarlo. Per la verifica ufficiale usa il [Validatore DCAT-AP IT](https://www.dati.gov.it/sviluppatori/validatore) messo a disposizione da AgID sul portale nazionale dati.gov.it: è il riferimento di riscontro per i cataloghi destinati alla federazione.
+
 ## Configurazione
 
 Copia un file da `examples/` e adattalo al tuo portale:
