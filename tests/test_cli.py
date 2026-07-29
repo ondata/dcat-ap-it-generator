@@ -267,3 +267,23 @@ def test_generate_survives_dataset_with_invalid_url(mock_fetch, mock_count, mock
     assert list(g.objects(ds_uri, DCAT.landingPage)) == [ds_uri]
     dl = list(g.objects(URIRef(f"{BASE_URL}/resource/res-1"), DCAT.downloadURL))
     assert len(dl) == 1 and "%3C" in str(dl[0])
+
+
+def test_serialize_atomic_uses_unique_temp_names(tmp_path):
+    """Due writer sullo stesso output non devono condividere il temporaneo."""
+    from dcat_ap_it_generator.cli import _serialize_atomic
+
+    seen = []
+
+    class _Recording:
+        def serialize(self, destination, format):
+            seen.append(destination)
+            Path(destination).write_text("<a> <b> <c> .\n")
+
+    output = tmp_path / "catalog.ttl"
+    _serialize_atomic(_Recording(), output)
+    _serialize_atomic(_Recording(), output)
+
+    assert len(set(seen)) == 2, "il path temporaneo non deve essere deterministico"
+    assert all(Path(d).parent == tmp_path for d in seen), "temporaneo nella stessa directory"
+    assert oct(output.stat().st_mode)[-3:] == "644"

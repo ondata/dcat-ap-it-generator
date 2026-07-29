@@ -5,11 +5,11 @@
 - Fix (issue #3): un campo `url` CKAN con testo libero non interrompe più la serializzazione dell'intero catalogo — nuovo helper `_safe_uri()` che valida con lo stesso predicato usato dal serializzatore rdflib, tenta un percent-encoding dei caratteri illegali e in ultima istanza scarta il valore con warning
 - Fallback per proprietà obbligatorie: `dcat:landingPage` → pagina del dataset, `dcat:accessURL` → pagina CKAN della risorsa; `dcat:downloadURL` e `dct:license` si scartano; senza email valida non si emette `dcatapit:Organization`
 - Coperti anche i punti non citati nella issue: `dct:license` delle distribuzioni (incluse quelle datastore), `vcard:hasEmail`, URI e `foaf:homepage` dei sotto-cataloghi da `organization.site`
-- Fix: scrittura atomica del TTL (`_serialize_atomic`) — un errore a metà serializzazione non lascia più un file troncato al posto dell'output valido precedente
+- Fix: scrittura atomica del TTL (`_serialize_atomic`) — un errore a metà serializzazione non lascia più un file troncato al posto dell'output valido precedente; nome temporaneo unico via `mkstemp`, così due run sovrapposti sullo stesso output non si pubblicano addosso un file a metà
 - Errore di serializzazione ora riportato con messaggio leggibile invece del traceback rdflib, exit code 1
 - Docs (issue #1): riferimento al Validatore AgID di dati.gov.it nel README (segnalazione di Daniele Crespi)
 - Aggiunto `examples/config-umbria.yml` — Regione Umbria, 455 dataset, 14 organizzazioni, il catalogo su cui la issue è emersa
-- Test: 97 test verdi (14 nuovi); verifica end-to-end su `dati.regione.umbria.it` — da exit 1 con TTL troncato di 40 KB a exit 0 con 3,3 MB, 455 dataset e 1456 distribuzioni
+- Test: 99 test verdi (16 nuovi); verifica end-to-end su `dati.regione.umbria.it` — da exit 1 con TTL troncato di 40 KB a exit 0 con 3,3 MB, 455 dataset e 1456 distribuzioni
 - Bump v0.1.8
 
 ## 2026-04-12

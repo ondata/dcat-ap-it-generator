@@ -292,9 +292,12 @@ def map_distribution(resource: dict, dataset_uri: URIRef, graph: Graph) -> URIRe
         graph.add((dist_uri, DCAT.accessURL, url))
     else:
         dataset_id = resource.get("package_id")
-        if dataset_id:
-            graph.add((dist_uri, DCAT.accessURL,
-                       URIRef(f"{base}/dataset/{quote(dataset_id)}/resource/{quote(res_id)}")))
+        fallback = (
+            URIRef(f"{base}/dataset/{quote(dataset_id)}/resource/{quote(res_id)}")
+            if dataset_id
+            else dataset_uri  # senza package_id resta la pagina del dataset
+        )
+        graph.add((dist_uri, DCAT.accessURL, fallback))
 
     fmt = format_uri(resource.get("format"))
     if fmt:

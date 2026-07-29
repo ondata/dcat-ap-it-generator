@@ -3,6 +3,7 @@
 
 import logging
 import os
+import tempfile
 import time
 from pathlib import Path
 
@@ -46,10 +47,18 @@ def _serialize_atomic(graph, path: Path) -> None:
     rdflib scrive in streaming: senza questo, un errore a metà serializzazione
     lascia sul disco un TTL troncato che un job schedulato pubblicherebbe come
     se fosse valido (issue #3).
+
+    Il nome del temporaneo è unico: due esecuzioni sovrapposte sullo stesso
+    output (facile con cron e cataloghi lenti) non devono pubblicarsi addosso
+    un file a metà.
     """
-    tmp_path = path.with_name(f".{path.name}.tmp")
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    os.close(fd)
+    tmp_path = Path(tmp_name)
     try:
         graph.serialize(destination=str(tmp_path), format="turtle")
+        # mkstemp crea a 0600: l'output va pubblicato leggibile come gli altri file
+        os.chmod(tmp_path, 0o644)
         os.replace(tmp_path, path)
     except BaseException as exc:
         tmp_path.unlink(missing_ok=True)

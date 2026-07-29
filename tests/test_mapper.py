@@ -994,3 +994,13 @@ def test_whole_catalog_survives_one_bad_dataset():
     ttl = g.serialize(format="turtle")
     assert f"{BASE_URL}/dataset/ds-ok" in ttl
     assert f"{BASE_URL}/dataset/ds-bad" in ttl
+
+
+def test_distribution_access_url_present_even_without_package_id():
+    """dcat:accessURL non deve mai mancare, nemmeno senza package_id."""
+    ds = {"id": "ds-1", "title": "T", "metadata_created": "2024-01-01",
+          "resources": [{"id": "res-1", "name": "r", "url": "non una url", "format": "CSV"}]}
+    g = build_catalog(CONFIG, [ds], BASE_URL)
+    access = list(g.objects(URIRef(f"{BASE_URL}/resource/res-1"), DCAT.accessURL))
+    assert access == [URIRef(f"{BASE_URL}/dataset/ds-1")]
+    g.serialize(format="turtle")
