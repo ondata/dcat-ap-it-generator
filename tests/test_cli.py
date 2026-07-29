@@ -200,3 +200,70 @@ SELECT ?Rule_ID ?Rule_Severity ?Class_Name ?Rule_Description ?Message WHERE {
     assert result.exit_code == 0  # solo warning, non errori
     assert "1 warning" in result.output
     assert "Catalog without description" in result.output
+
+
+# --- scrittura atomica del TTL (issue #3) ---
+
+def test_serialize_atomic_leaves_previous_output_intact(tmp_path):
+    """Se la serializzazione fallisce, l'output precedente non va toccato."""
+    import pytest
+    import typer
+    from dcat_ap_it_generator.cli import _serialize_atomic
+
+    output = tmp_path / "catalog.ttl"
+    output.write_text("# catalogo valido precedente\n")
+
+    class _Exploding:
+        def serialize(self, destination, format):
+            Path(destination).write_text("<a> <b> <c> .\n")  # scrittura parziale
+            raise Exception("boom")
+
+    with pytest.raises(typer.Exit) as exc:
+        _serialize_atomic(_Exploding(), output)
+
+    assert exc.value.exit_code == 1
+    assert output.read_text() == "# catalogo valido precedente\n"
+    assert list(tmp_path.glob(".*tmp")) == [], "nessun file temporaneo residuo"
+
+
+def test_serialize_atomic_writes_on_success(tmp_path):
+    from dcat_ap_it_generator.cli import _serialize_atomic
+
+    class _Ok:
+        def serialize(self, destination, format):
+            Path(destination).write_text("<a> <b> <c> .\n")
+
+    output = tmp_path / "catalog.ttl"
+    _serialize_atomic(_Ok(), output)
+    assert output.read_text() == "<a> <b> <c> .\n"
+    assert list(tmp_path.glob(".*tmp")) == []
+
+
+@patch("dcat_ap_it_generator.ckan_client.check_portal", return_value=(True, "CKAN 2.10"))
+@patch("dcat_ap_it_generator.ckan_client.count_datasets", return_value=1)
+@patch("dcat_ap_it_generator.ckan_client.fetch_all_datasets")
+def test_generate_survives_dataset_with_invalid_url(mock_fetch, mock_count, mock_check, tmp_path):
+    """Un url CKAN con testo libero non deve far perdere il catalogo (issue #3)."""
+    ds = {
+        "id": "ds-bad", "title": "DS Bad", "metadata_created": "2024-01-01",
+        "url": "SUAP Comuni aderenti piattaforma regionale",
+        "resources": [{"id": "res-1", "package_id": "ds-bad", "name": "r",
+                       "url": "https://ex.org/sparql?q=select+<x>", "format": "CSV"}],
+    }
+    mock_fetch.return_value = iter([ds])
+
+    output = tmp_path / "out.ttl"
+    config_path = _write_config(tmp_path)
+    result = runner.invoke(
+        app, ["generate", "--config", str(config_path), "--output", str(output)]
+    )
+    assert result.exit_code == 0, result.output
+    assert output.exists()
+
+    from rdflib import Graph, URIRef
+    from dcat_ap_it_generator.namespaces import DCAT
+    g = Graph(); g.parse(str(output), format="turtle")
+    ds_uri = URIRef(f"{BASE_URL}/dataset/ds-bad")
+    assert list(g.objects(ds_uri, DCAT.landingPage)) == [ds_uri]
+    dl = list(g.objects(URIRef(f"{BASE_URL}/resource/res-1"), DCAT.downloadURL))
+    assert len(dl) == 1 and "%3C" in str(dl[0])

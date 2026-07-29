@@ -890,3 +890,107 @@ def test_different_publishers_not_deduplicated():
     pub_a = list(g.objects(URIRef(f"{BASE_URL}/dataset/ds-diff-a"), DCT.publisher))
     pub_b = list(g.objects(URIRef(f"{BASE_URL}/dataset/ds-diff-b"), DCT.publisher))
     assert pub_a[0] != pub_b[0], "Different publishers should have different BNodes"
+
+
+# --- _safe_uri e URI non validi (issue #3) ---
+
+def test_safe_uri_passthrough_valid():
+    from dcat_ap_it_generator.mapper import _safe_uri
+    assert _safe_uri("https://example.org/a.csv") == URIRef("https://example.org/a.csv")
+
+
+def test_safe_uri_normalizes_unencoded_chars():
+    """Una query SPARQL con < e > non encodati va normalizzata, non persa."""
+    from dcat_ap_it_generator.mapper import _safe_uri
+    raw = "https://ex.org/sparql?qtxt=select+%3Fs+<https%3A%2F%2Fx>+where"
+    result = _safe_uri(raw)
+    assert result is not None
+    assert "%3C" in str(result) and "%3E" in str(result)
+    assert "%3Fs" in str(result), "gli encoding già presenti non vanno alterati"
+    Graph().add((URIRef("https://ex.org/s"), DCAT.downloadURL, result))
+
+
+def test_safe_uri_discards_free_text():
+    from dcat_ap_it_generator.mapper import _safe_uri
+    assert _safe_uri("SUAP Comuni aderenti piattaforma regionale") is None
+    assert _safe_uri("AGID - DATI SPC") is None
+
+
+def test_safe_uri_discards_free_text_containing_colon():
+    """Un testo con ':' non deve diventare un URI con schema inventato."""
+    from dcat_ap_it_generator.mapper import _safe_uri
+    assert _safe_uri("Rilievo e compilazione: Comando Carabinieri Forestale") is None
+
+
+def test_safe_uri_none_and_empty():
+    from dcat_ap_it_generator.mapper import _safe_uri
+    assert _safe_uri(None) is None
+    assert _safe_uri("") is None
+    assert _safe_uri("   ") is None
+
+
+def test_landing_page_falls_back_when_url_invalid():
+    """dcat:landingPage è obbligatoria: fallback sulla pagina del dataset."""
+    ds = {"id": "ds-bad", "title": "T", "metadata_created": "2024-01-01",
+          "url": "SUAP Comuni aderenti piattaforma regionale", "resources": []}
+    g = build_catalog(CONFIG, [ds], BASE_URL)
+    ds_uri = URIRef(f"{BASE_URL}/dataset/ds-bad")
+    landing = list(g.objects(ds_uri, DCAT.landingPage))
+    assert landing == [URIRef(f"{BASE_URL}/dataset/ds-bad")]
+    g.serialize(format="turtle")
+
+
+def test_distribution_access_url_falls_back_when_url_invalid():
+    """dcat:accessURL è obbligatoria: fallback sulla pagina CKAN della risorsa."""
+    ds = {"id": "ds-1", "title": "T", "metadata_created": "2024-01-01",
+          "resources": [{"id": "res-1", "package_id": "ds-1", "name": "r",
+                         "url": "non una url", "format": "CSV"}]}
+    g = build_catalog(CONFIG, [ds], BASE_URL)
+    dist_uri = URIRef(f"{BASE_URL}/resource/res-1")
+    assert list(g.objects(dist_uri, DCAT.downloadURL)) == []
+    assert list(g.objects(dist_uri, DCAT.accessURL)) == [
+        URIRef(f"{BASE_URL}/dataset/ds-1/resource/res-1")
+    ]
+    g.serialize(format="turtle")
+
+
+def test_distribution_license_discarded_when_invalid():
+    ds = {"id": "ds-1", "title": "T", "metadata_created": "2024-01-01",
+          "resources": [{"id": "res-1", "package_id": "ds-1", "name": "r",
+                         "url": "https://ex.org/a.csv", "format": "CSV",
+                         "license_type": "CC-BY 4.0"}]}
+    g = build_catalog(CONFIG, [ds], BASE_URL)
+    assert list(g.objects(URIRef(f"{BASE_URL}/resource/res-1"), DCT.license)) == []
+    g.serialize(format="turtle")
+
+
+def test_contact_point_skipped_when_email_invalid():
+    """vcard:hasEmail è obbligatoria: senza email valida niente Organization."""
+    ds = {"id": "ds-1", "title": "T", "metadata_created": "2024-01-01",
+          "maintainer_email": "info @comune.it",
+          "organization": {"id": "o1", "name": "o1", "title": "O1"}, "resources": []}
+    g = build_catalog(CONFIG, [ds], BASE_URL)
+    assert list(g.objects(URIRef(f"{BASE_URL}/dataset/ds-1"), DCAT.contactPoint)) == []
+    g.serialize(format="turtle")
+
+
+def test_subcatalog_uri_falls_back_when_org_site_invalid():
+    """Un site org malformato non deve far fallire la modalità multi-catalog."""
+    ds = {"id": "ds-1", "title": "T", "metadata_created": "2024-01-01",
+          "organization": {"id": "o1", "name": "o1", "title": "O1"}, "resources": []}
+    org_md = {"o1": {"id": "o1", "name": "o1", "title": "O1",
+                     "site": "https://www.comune.x.it/area riservata"}}
+    g = build_catalog_multi(CONFIG, {"o1": [ds]}, BASE_URL, org_md)
+    ttl = g.serialize(format="turtle")
+    assert "area riservata" not in ttl
+
+
+def test_whole_catalog_survives_one_bad_dataset():
+    """Un solo record malformato non deve far perdere l'intero catalogo."""
+    good = {"id": "ds-ok", "title": "OK", "metadata_created": "2024-01-01", "resources": []}
+    bad = {"id": "ds-bad", "title": "Bad", "metadata_created": "2024-01-01",
+           "url": "testo libero non url", "resources": []}
+    g = build_catalog(CONFIG, [good, bad], BASE_URL)
+    ttl = g.serialize(format="turtle")
+    assert f"{BASE_URL}/dataset/ds-ok" in ttl
+    assert f"{BASE_URL}/dataset/ds-bad" in ttl

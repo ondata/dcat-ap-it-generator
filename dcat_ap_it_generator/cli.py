@@ -2,6 +2,7 @@
 """DCAT-AP IT Generator — genera cataloghi RDF Turtle da portali CKAN."""
 
 import logging
+import os
 import time
 from pathlib import Path
 
@@ -37,6 +38,26 @@ def _load_config(config_path: Path) -> dict:
         raise typer.Exit(1)
     with open(config_path) as f:
         return yaml.safe_load(f)
+
+
+def _serialize_atomic(graph, path: Path) -> None:
+    """Serializza su file temporaneo e rinomina solo a esito positivo.
+
+    rdflib scrive in streaming: senza questo, un errore a metà serializzazione
+    lascia sul disco un TTL troncato che un job schedulato pubblicherebbe come
+    se fosse valido (issue #3).
+    """
+    tmp_path = path.with_name(f".{path.name}.tmp")
+    try:
+        graph.serialize(destination=str(tmp_path), format="turtle")
+        os.replace(tmp_path, path)
+    except BaseException as exc:
+        tmp_path.unlink(missing_ok=True)
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        err_console.print(f"[red]Errore di serializzazione:[/red] {exc}")
+        err_console.print(f"  [dim]{path} non è stato modificato[/dim]")
+        raise typer.Exit(1) from exc
 
 
 def _validate_config(cfg: dict) -> None:
@@ -170,7 +191,7 @@ def generate(
                         n_total_dist += sum(len(d.get("resources") or []) for d in chunk_buf)
                         g = build_catalog(cfg, chunk_buf, base_url)
                         chunk_path = output_path.parent / f"{stem}_{n_chunks_written:03d}.ttl"
-                        g.serialize(destination=str(chunk_path), format="turtle")
+                        _serialize_atomic(g, chunk_path)
                         if verbose:
                             console.print(f"  [green]✓[/green] {chunk_path} — {len(chunk_buf)} dataset")
                         chunk_buf = []
@@ -181,7 +202,7 @@ def generate(
                     n_total_dist += sum(len(d.get("resources") or []) for d in chunk_buf)
                     g = build_catalog(cfg, chunk_buf, base_url)
                     chunk_path = output_path.parent / f"{stem}_{n_chunks_written:03d}.ttl"
-                    g.serialize(destination=str(chunk_path), format="turtle")
+                    _serialize_atomic(g, chunk_path)
                     if verbose:
                         console.print(f"  [green]✓[/green] {chunk_path} — {len(chunk_buf)} dataset")
             else:
@@ -191,6 +212,9 @@ def generate(
                     else:
                         errors.append(ds.get("id", "unknown"))
                     progress.update(task, advance=1)
+        except typer.Exit:
+            # Già segnalata con messaggio proprio (es. _serialize_atomic)
+            raise
         except RuntimeError as e:
             err_console.print(f"[red]Errore fetch dataset:[/red] {e}")
             raise typer.Exit(1)
@@ -207,7 +231,7 @@ def generate(
                 org_datasets = [d for d in datasets if _dataset_org(d) == org]
                 g = build_catalog(cfg, org_datasets, base_url)
                 org_path = output_path.parent / f"{org}.ttl"
-                g.serialize(destination=str(org_path), format="turtle")
+                _serialize_atomic(g, org_path)
                 n_dist = sum(len(d.get("resources") or []) for d in org_datasets)
                 if verbose:
                     console.print(f"  [green]✓[/green] {org_path} — {len(org_datasets)} dataset, {n_dist} distribuzioni")
@@ -225,7 +249,7 @@ def generate(
             )
 
             g = build_catalog_multi(cfg, datasets_by_org, base_url, org_metadata)
-            g.serialize(destination=str(output_path), format="turtle")
+            _serialize_atomic(g, output_path)
             if verbose:
                 console.print(
                     f"  [green]✓[/green] {output_path} — "
@@ -233,7 +257,7 @@ def generate(
                 )
         else:
             g = build_catalog(cfg, datasets, base_url)
-            g.serialize(destination=str(output_path), format="turtle")
+            _serialize_atomic(g, output_path)
 
         n_total_datasets = len(datasets)
         n_total_dist = sum(len(ds.get("resources") or []) for ds in datasets)

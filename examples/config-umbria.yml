@@ -1,0 +1,21 @@
+portal:
+  url: "https://dati.regione.umbria.it"  # URL base portale CKAN (CKAN 2.9.5, 455 dataset)
+  api_key: ""                            # Opzionale, per portali privati
+  rows_per_page: 100                     # Dataset per richiesta paginata
+  query_template: ""                     # Opzionale, filtro CKAN fq (es. "organization:nome-org")
+  multi_catalog: true                    # Genera 1 aggregator + 1 sub-catalog per organizzazione (14 org)
+  datastore_distributions: true          # Aggiunge distribuzioni CSV/TSV/JSON/XML per risorse con datastore attivo
+
+catalog:
+  uri: "https://dati.regione.umbria.it/catalog"
+  title: "Catalogo Open Data - Regione Umbria"
+  description: "Catalogo dataset della Regione Umbria"
+  issued: ""
+  publisher_name: "Regione Umbria"
+  publisher_identifier: "r_umbria"       # Codice IPA — cerca su https://indicepa.gov.it
+  language: "ITA"                        # Codice ISO 639-3
+  homepage: "https://dati.regione.umbria.it"
+  spatial: "https://www.geonames.org/3165048"   # Umbria
+
+output:
+  path: "output/umbria.ttl"
