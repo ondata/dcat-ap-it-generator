@@ -1,6 +1,13 @@
 # LOG
 
-## 2026-07-29
+## 2026-08-05
+
+- CI: addetto workflow GitHub Actions (`uv sync --group dev --locked` → pytest → ruff) su PR e push a main
+- Lint: codebase portata a `ruff check .` pulito (import sort, unused, timezone/UTC alias); config `[tool.ruff.lint.flake8-bugbear] extend-immutable-calls` per il pattern idiomatico typer
+- Fix: rimosso shebang vestigiale da `cli.py` (EXE001 su Linux CI — il CLI è installato via `[project.scripts]`)
+- Docs: riscritto `docs/spec.md` allineato allo stato attuale (uv, package `dcat_ap_it_generator/`, comandi `validate`, fallback OWL, robustezza)
+- Test: 99 verdi, CI verde
+
 
 - Fix (issue #3): un campo `url` CKAN con testo libero non interrompe più la serializzazione dell'intero catalogo — nuovo helper `_safe_uri()` che valida con lo stesso predicato usato dal serializzatore rdflib, tenta un percent-encoding dei caratteri illegali e in ultima istanza scarta il valore con warning
 - Fallback per proprietà obbligatorie: `dcat:landingPage` → pagina del dataset, `dcat:accessURL` → pagina CKAN della risorsa; `dcat:downloadURL` e `dct:license` si scartano; senza email valida non si emette `dcatapit:Organization`
