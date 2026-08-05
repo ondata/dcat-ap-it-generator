@@ -1,10 +1,13 @@
 """Test per ckan_client.py con HTTP mockato via unittest.mock."""
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from dcat_ap_it_generator.ckan_client import check_portal, count_datasets, fetch_all_datasets
-
+from dcat_ap_it_generator.ckan_client import (
+    check_portal,
+    count_datasets,
+    fetch_all_datasets,
+)
 
 BASE = "https://example.com"
 
@@ -134,6 +137,7 @@ def test_fetch_all_datasets_pagination(mock_time, mock_session):
 def test_fetch_all_datasets_retry_on_error(mock_session):
     """Primo tentativo fallisce, retry riesce."""
     from requests import RequestException
+
     import dcat_ap_it_generator.ckan_client as mod
     with patch.object(mod, "time"):
         # Prima chiamata: errore, seconda (retry): ok, terza: empty

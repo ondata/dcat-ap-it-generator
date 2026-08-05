@@ -12,7 +12,13 @@ import yaml
 from pyfiglet import figlet_format
 from rich.console import Console
 from rich.panel import Panel
-from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+)
 from rich.table import Table
 
 app = typer.Typer(
@@ -114,7 +120,7 @@ def generate(
     _validate_config(cfg)
 
     portal_cfg = cfg.get("portal", {})
-    catalog_cfg = cfg.get("catalog", {})
+    _catalog_cfg = cfg.get("catalog", {})
     output_cfg = cfg.get("output", {})
 
     base_url: str = portal_cfg["url"]
@@ -144,7 +150,12 @@ def generate(
         )
         raise typer.Exit(1)
 
-    from .ckan_client import check_portal, count_datasets, fetch_all_datasets, fetch_all_organizations
+    from .ckan_client import (
+        check_portal,
+        count_datasets,
+        fetch_all_datasets,
+        fetch_all_organizations,
+    )
     from .mapper import build_catalog, build_catalog_multi
 
     # Health check portale
@@ -405,7 +416,7 @@ def validate(
         raise typer.Exit(1)
 
     rules_path = rules_dir or Path(__file__).parent / "rules"
-    rule_files = sorted(f for f in rules_path.glob("*.rq") if not f.suffix == ".suspended")
+    rule_files = sorted(f for f in rules_path.glob("*.rq") if f.suffix != ".suspended")
 
     console.print(f"Caricamento [cyan]{input}[/cyan]...")
     g = Graph()
@@ -431,7 +442,7 @@ def validate(
                     "description": str(row_d.get("Rule_Description", "")),
                     "message": str(row_d.get("Message", "")),
                 })
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - round-robin: una regola rotta non blocca la validazione
             skipped.append(rule_file.stem)
             err_console.print(f"[dim]Skip {rule_file.stem}: {type(exc).__name__}: {exc}[/dim]")
 
@@ -439,7 +450,7 @@ def validate(
         console.print(f"[yellow]Regole saltate: {len(skipped)}/{len(rule_files)}[/yellow]")
 
     if not violations:
-        console.print(f"[green]✓ Nessuna violazione trovata[/green]")
+        console.print("[green]✓ Nessuna violazione trovata[/green]")
         raise typer.Exit(0)
 
     errors = [v for v in violations if v["severity"] == "error"]

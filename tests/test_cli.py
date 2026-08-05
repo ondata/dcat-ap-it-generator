@@ -1,7 +1,7 @@
 """Test per cli.py con typer CliRunner."""
 import json
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from typer.testing import CliRunner
 
@@ -105,9 +105,10 @@ def test_generate_multi_catalog(mock_fetch, mock_orgs, mock_count, mock_check, t
 
     # Verifica struttura: aggregator + 2 sub-catalog + dct:hasPart
     from rdflib import Graph, URIRef
-    from dcat_ap_it_generator.namespaces import DCAT, DCATAPIT, DCT
+
+    from dcat_ap_it_generator.namespaces import DCATAPIT, DCT
     g = Graph(); g.parse(str(output), format="turtle")
-    catalogs = set(g.subjects(None, None))  # not used
+    _catalogs = set(g.subjects(None, None))
     cat_nodes = set(g.subjects(predicate=None, object=DCATAPIT.Catalog))
     # rdflib pattern correction:
     from rdflib.namespace import RDF
@@ -208,6 +209,7 @@ def test_serialize_atomic_leaves_previous_output_intact(tmp_path):
     """Se la serializzazione fallisce, l'output precedente non va toccato."""
     import pytest
     import typer
+
     from dcat_ap_it_generator.cli import _serialize_atomic
 
     output = tmp_path / "catalog.ttl"
@@ -216,7 +218,7 @@ def test_serialize_atomic_leaves_previous_output_intact(tmp_path):
     class _Exploding:
         def serialize(self, destination, format):
             Path(destination).write_text("<a> <b> <c> .\n")  # scrittura parziale
-            raise Exception("boom")
+            raise Exception("boom")  # noqa: TRY002 - test-only sentinel per fixt
 
     with pytest.raises(typer.Exit) as exc:
         _serialize_atomic(_Exploding(), output)
@@ -261,6 +263,7 @@ def test_generate_survives_dataset_with_invalid_url(mock_fetch, mock_count, mock
     assert output.exists()
 
     from rdflib import Graph, URIRef
+
     from dcat_ap_it_generator.namespaces import DCAT
     g = Graph(); g.parse(str(output), format="turtle")
     ds_uri = URIRef(f"{BASE_URL}/dataset/ds-bad")

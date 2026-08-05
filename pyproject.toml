@@ -35,10 +35,18 @@ dcat-ap-it = "dcat_ap_it_generator.cli:app"
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
+    "ruff>=0.9.0",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff.lint]
+# typer.Option/Argument in signature defaults is the idiomatic typer pattern.
+# Keep B008 active for real mutable defaults, but whitelist these two.
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["typer.Option", "typer.Argument"]
 
 [tool.uv.build-backend]
 module-root = ""

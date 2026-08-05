@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Generator
+from collections.abc import Generator
 
 import requests
 
@@ -65,7 +65,7 @@ def fetch_all_datasets(
     api_key: str = "",
     max_datasets: int | None = None,
     timeout: int = 30,
-) -> Generator[dict, None, None]:
+) -> Generator[dict]:
     """Yield ogni dataset dal portale CKAN, con paginazione automatica.
 
     Args:
