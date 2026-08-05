@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """DCAT-AP IT Generator — genera cataloghi RDF Turtle da portali CKAN."""
 
 import logging
