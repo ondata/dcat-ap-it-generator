@@ -1,16 +1,26 @@
 import logging
 import os
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from urllib.parse import quote
 
 import yaml
-from rdflib import Graph, Literal, URIRef, BNode
+from rdflib import BNode, Graph, Literal, URIRef
 from rdflib.namespace import RDF, XSD
 
 from dcat_ap_it_generator.namespaces import (
-    BINDINGS, DCAT, DCATAPIT, DCT, EU_ACCESS_RIGHT, EU_DATA_THEME,
-    EU_FILE_TYPE, EU_FREQUENCY, EU_LANGUAGE, FOAF, OWL, VCARD,
+    BINDINGS,
+    DCAT,
+    DCATAPIT,
+    DCT,
+    EU_ACCESS_RIGHT,
+    EU_DATA_THEME,
+    EU_FILE_TYPE,
+    EU_FREQUENCY,
+    EU_LANGUAGE,
+    FOAF,
+    OWL,
+    VCARD,
 )
 
 log = logging.getLogger(__name__)
@@ -204,13 +214,13 @@ def _literal_date(value: str | None) -> Literal | None:
         return None
     if "T" in value:
         try:
-            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            dt = datetime.fromisoformat(value)
             return Literal(dt.isoformat(), datatype=XSD.dateTime)
         except ValueError:
             value = value.split("T")[0]
     for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d", "%d/%m/%Y"):
         try:
-            dt = datetime.strptime(value, fmt)
+            dt = datetime.strptime(value, fmt)  # noqa: DTZ007 - parsing date-only order; output is xsd:date
             return Literal(dt.strftime("%Y-%m-%d"), datatype=XSD.date)
         except ValueError:
             continue
@@ -474,8 +484,7 @@ def map_dataset(dataset: dict, base_url: str, graph: Graph, _agent_cache: dict |
                     or dataset.get("metadata_modified"))
     modified = _literal_date(modified_raw)
     if not modified:
-        from datetime import timezone
-        modified = Literal(datetime.now(timezone.utc).strftime("%Y-%m-%d"), datatype=XSD.date)
+        modified = Literal(datetime.now(UTC).strftime("%Y-%m-%d"), datatype=XSD.date)
     graph.add((ds_uri, DCT.modified, modified))
 
     # Frequency — top-level → extras, fallback UNKNOWN (obbligatorio OWL)
@@ -626,9 +635,8 @@ def _emit_catalog_node(
 
 
 def _today_literal() -> Literal:
-    from datetime import timezone
     return Literal(
-        datetime.now(timezone.utc).strftime("%Y-%m-%d"), datatype=XSD.date
+        datetime.now(UTC).strftime("%Y-%m-%d"), datatype=XSD.date
     )
 
 

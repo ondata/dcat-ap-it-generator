@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+
 from rdflib import Graph, URIRef
 from rdflib.namespace import RDF
 
@@ -11,7 +12,15 @@ from dcat_ap_it_generator.mapper import (
     license_uri,
     map_dataset,
 )
-from dcat_ap_it_generator.namespaces import DCAT, DCATAPIT, DCT, EU_FREQUENCY, EU_LANGUAGE, FOAF, OWL
+from dcat_ap_it_generator.namespaces import (
+    DCAT,
+    DCATAPIT,
+    DCT,
+    EU_FREQUENCY,
+    EU_LANGUAGE,
+    FOAF,
+    OWL,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 BASE_URL = "https://dati.trentino.it"
@@ -329,7 +338,6 @@ def test_dataset_single_language():
 
 def test_no_contact_point_without_email():
     """Senza email, non deve essere emesso dcatapit:Organization (Rule 209)."""
-    from dcat_ap_it_generator.namespaces import VCARD
     ds = {
         "id": "test-no-email",
         "title": "Test No Email",
@@ -469,7 +477,6 @@ def test_contact_point_same_org_different_email():
 
 def test_contact_point_same_org_same_email_deduped():
     """Due dataset con stessa org e stessa email devono condividere UN SOLO contact point."""
-    from dcat_ap_it_generator.namespaces import VCARD
     org = {"id": "org-shared", "title": "Ente Condiviso", "name": "ente-condiviso"}
     ds1 = {
         "id": "ds-same-a",
@@ -516,7 +523,7 @@ def test_publisher_bnode_deduplicated():
     }
     g = build_catalog(CONFIG, [ds1, ds2], BASE_URL)
 
-    agents = list(g.subjects(RDF.type, DCATAPIT.Agent))
+    _agents = list(g.subjects(RDF.type, DCATAPIT.Agent))
     # catalog publisher + 1 shared publisher + 1 shared rightsHolder = max 3 distinct BNodes
     # but publisher == rightsHolder (same name/id) so should be 2: catalog pub + shared one
     publisher_nodes_ds1 = list(g.objects(
