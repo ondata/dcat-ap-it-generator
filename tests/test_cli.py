@@ -218,7 +218,7 @@ def test_serialize_atomic_leaves_previous_output_intact(tmp_path):
     class _Exploding:
         def serialize(self, destination, format):
             Path(destination).write_text("<a> <b> <c> .\n")  # scrittura parziale
-            raise Exception("boom")  # noqa: TRY002 - test-only sentinel per fixt
+            raise Exception("boom")  # noqa: TRY002 - test-only sentinel per fixture
 
     with pytest.raises(typer.Exit) as exc:
         _serialize_atomic(_Exploding(), output)

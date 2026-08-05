@@ -1,96 +1,119 @@
 # Spec: DCAT-AP IT Generator
 
-## Objective
-
-Script Python che interroga un portale CKAN via API, legge i metadata dei dataset pubblicati e genera un file RDF in formato Turtle conforme al profilo italiano DCAT-AP IT (https://www.dati.gov.it/sites/default/files/2020-02/DCAT-AP_IT.owl).
+Tool Python che interroga un portale CKAN via API, legge i metadati dei dataset e genera un file RDF in formato Turtle conforme al profilo italiano DCAT-AP IT (https://www.dati.gov.it/sites/default/files/2020-02/DCAT-AP_IT.owl).
 
 **Utenti target:** PA italiane che devono produrre cataloghi di metadati conformi.
 
-**Successo:** dato un portale CKAN configurato, lo script produce un file `.ttl` valido che contiene un `dcatapit:Catalog` con tutti i `dcatapit:Dataset` e le relative `dcatapit:Distribution`.
+**Successo:** data una config puntata su un portale CKAN, il tool produce un `.ttl` che contiene un `dcatapit:Catalog` con tutti i `dcatapit:Dataset` e le relative `dcatapit:Distribution`, pronto per essere harvested.
 
 ---
+
+## Architettura
+
+Pipeline: **CLI → ckan client → mapper → grafo RDF → file Turtle**
+
+```
+Portale CKAN API  →  dcat-ap-it generate  →  catalog.ttl  →  harvesting nazionale/regionale
+```
 
 ## Tech Stack
 
-- Python 3.10+
+- Python **≥ 3.13** (usa `int | None`, `match`)
 - `requests` — chiamate HTTP alle API CKAN
 - `rdflib` — costruzione e serializzazione del grafo RDF
 - `PyYAML` — lettura configurazione
-- `typer[all]` — CLI con argomenti/opzioni tipizzati
-- `rich` — output colorato, tabelle, progress bar
-- `questionary` — prompt interattivi (setup guidato)
-- `pyfiglet` — banner ASCII all'avvio
-- Nessun framework web, nessun ORM
+- `typer[all]` — CLI con opzioni tipizzate
+- `rich` — output colorato e progress bar
+- `questionary` — prompt interattivi (comando `configure`)
+- `pyfiglet` — banner ASCII con `--verbose`
+- Gestione dipendenze/package: **uv** (`pyproject.toml`, `uv.lock`); `uv tool install .` → comando `dcat-ap-it`
+
+Riferimento OWL archiviato in `docs/specs/DCAT-AP_IT.owl`.
 
 ---
 
-## Commands
+## Comandi
 
 ```
-# Esecuzione normale
-python3 generate.py --config config.yml
-
-# Esecuzione con banner e feedback dettagliato
-python3 generate.py --config config.yml --verbose
-
-# Setup guidato interattivo (crea config.yml via prompt)
-python3 generate.py configure
-
-# Test
-python3 -m pytest tests/
-
-# Lint
-ruff check .
-
-# Dipendenze
-pip3 install -r requirements.txt
+uv run dcat-ap-it generate --config config.yml           # Genera il file Turtle
+uv run dcat-ap-it generate --config config.yml --dry-run # Anteprima senza scrivere
+uv run dcat-ap-it configure                               # Wizard interattivo (solo umani)
+uv run dcat-ap-it validate output/catalog.ttl             # Valida contro le 122 regole SPARQL
+uv run dcat-ap-it validate output/catalog.ttl --errors-only
 ```
+
+### `generate` — opzioni
+
+| Opzione | Default | Effetto |
+|---|---|---|
+| `--config` / `-c` | `config.yml` | File YAML config |
+| `--output` / `-o` | dal config | Override path output |
+| `--verbose` / `-v` | off | Banner ASCII + pannello riepilogativo |
+| `--dry-run` | off | Solo fetch, non scrive file |
+| `--yes` / `-y` | off | Salta conferme interattive |
+| `--organizations` | — | Filtra per org (comma-separated), un file per org |
+| `--multi-catalog` | off | 1 aggregator + 1 sub-catalog per organization (`dct:hasPart`) |
+
+### `validate` — opzioni
+
+| Opzione | Default | Effetto |
+|---|---|---|
+| `input` (arg posizionale) | — | File TTL da validare |
+| `--rules-dir` | built-in | Directory regole SPARQL |
+| `--errors-only` / `-e` | off | Mostra solo errori, non warning |
 
 ---
 
-## Project Structure
+## Struttura del progetto
 
 ```
 dcat-ap-it-generator/
-├── generate.py          # Entry point CLI (typer app)
-├── config.yml           # Configurazione (non committato, vedi config.example.yml)
-├── config.example.yml   # Template configurazione
-├── requirements.txt
-├── src/
-│   ├── ckan_client.py   # Fetch dati da CKAN API
-│   ├── mapper.py        # Mapping CKAN → DCAT-AP IT RDF
-│   └── namespaces.py    # Prefix RDF (DCATAPIT, DCAT, DCT, ADMS, ecc.)
-├── tests/
-│   ├── test_mapper.py
-│   └── fixtures/        # JSON di esempio da API CKAN
-├── docs/
-│   └── spec.md
-└── tmp/                 # File temporanei (non committati)
+├── pyproject.toml           # Dipendenze, entry point, config test/ruff
+├── uv.lock                  # Lock delle dipendenze
+├── dcat_ap_it_generator/
+│   ├── cli.py               # App typer: generate, configure, validate
+│   ├── ckan_client.py       # Fetch paginato API CKAN + retry
+│   ├── mapper.py            # Mapping CKAN → DCAT-AP IT RDF (rdflib)
+│   ├── namespaces.py        # Namespace RDF + BINDINGS
+│   ├── licenses.yml         # Titoli licenze CKAN → URI EU Office
+│   └── rules/               # 122 regole SPARQL (.rq; *.suspended saltate)
+├── tests/                   # pytest (99 test), fixture statiche in tests/fixtures/
+├── examples/                # Config reali: messina, milano, umbria, matera, olbia
+├── docs/                    # spec.md, plan.md, rules.md, release.md, specs/
+└── output/                  # TTL generati (gitignorato)
 ```
 
 ---
 
-## Configuration (config.example.yml)
+## Configurazione
 
 ```yaml
 portal:
-  url: "https://dati.trentino.it"  # URL base portale CKAN
-  api_key: ""                       # Opzionale, solo per portali privati
-  rows_per_page: 100                # Dataset per richiesta paginata
+  url: "https://dati.comune.esempio.it"   # URL base portale CKAN
+  api_key: ""                             # Opzionale, portali privati
+  rows_per_page: 100                      # Dataset per richiesta paginata
+  max_datasets: 0                         # 0 = nessun limite
+  chunk_size: 0                           # se > 0, genera N file TTL separati (_001, _002…)
+  query_template: ""                      # Filtro CKAN fq (es. "organization:nome-org")
+  multi_catalog: false                    # Genera aggregator + sub-catalog per org
+  datastore_distributions: false          # Distribuzioni CSV/TSV/JSON/XML da endpoint /datastore/dump/
 
 catalog:
-  uri: "https://dati.trentino.it/catalog"
-  title: "Catalogo Open Data - PAT"
-  description: "Catalogo dataset della Provincia Autonoma di Trento"
-  issued: "2021-01-01"
-  publisher_name: "Provincia Autonoma di Trento"
-  publisher_identifier: "IPA_CODE"  # Codice IPA dell'ente
-  language: "it"
-  homepage: "https://dati.trentino.it"
+  uri: "https://dati.comune.esempio.it/catalog"
+  title: "Catalogo Open Data"
+  description: ""                         # Opzionale
+  issued: ""                              # Opzionale, ISO 8601
+  publisher_name: "Comune di Esempio"
+  publisher_identifier: "c_xxxxx"        # Codice IPA — https://indicepa.gov.it
+  language: "ITA"                         # Codice ISO 639-3
+  homepage: ""                            # Opzionale
+  spatial: ""                             # Opzionale, URI GeoNames (es. https://www.geonames.org/2524170)
 
 output:
   path: "output/catalog.ttl"
 ```
+
+`multi_catalog` e `datastore_distributions` sono leggibili anche come flag CLI (`--multi-catalog`) o dalla config YAML.
 
 ---
 
@@ -98,213 +121,136 @@ output:
 
 ### Livello Catalog (`dcatapit:Catalog`)
 
-| Campo config YAML       | Proprietà RDF             |
-|-------------------------|---------------------------|
-| `catalog.uri`           | `@id` del Catalog         |
-| `catalog.title`         | `dct:title`               |
-| `catalog.description`   | `dct:description`         |
-| `catalog.issued`        | `dct:issued`              |
-| `catalog.publisher_*`   | `dct:publisher` (Agent)   |
-| `catalog.language`      | `dct:language`            |
-| `catalog.homepage`      | `foaf:homepage`           |
-| `portal.url`            | `dcat:themeTaxonomy`      |
+| Fonte | Proprietà | Note |
+|---|---|---|
+| `catalog.uri` | soggetto del Catalog | |
+| `catalog.title` | `dct:title` | |
+| `catalog.description` | `dct:description` | |
+| `catalog.issued` | `dct:issued` | |
+| `catalog.publisher_*` | `dct:publisher` | `dcatapit:Organization` |
+| `catalog.language` | `dct:language` | |
+| `catalog.homepage` | `foaf:homepage` | |
+| `catalog.spatial` | `dct:spatial` | |
+| — | `dcat:themeTaxonomy` | sempre presente |
+| (multi-catalog) | `dct:hasPart` | sub-catalog per organizzazione |
 
 ### Livello Dataset (`dcatapit:Dataset`)
 
-| Campo CKAN              | Proprietà RDF                        | Note                          |
-|-------------------------|--------------------------------------|-------------------------------|
-| `id`                    | `dct:identifier`                     |                               |
-| `title`                 | `dct:title`                          |                               |
-| `notes`                 | `dct:description`                    |                               |
-| `tags[].name`           | `dcat:keyword`                       |                               |
-| `license_title`         | `dct:license`                        | URI da vocabolario EU         |
-| `issued`                | `dct:issued`                         | extra field                   |
-| `modified`              | `dct:modified`                       | extra field                   |
-| `frequency`             | `dct:accrualPeriodicity`             | URI da EU Vocab frequencies   |
-| `language`              | `dct:language`                       | `{ITA,DEU}` → URI ISO 639     |
-| `publisher_name`        | `dct:publisher > foaf:name`          | extra field                   |
-| `holder_name`           | `dct:rightsHolder > foaf:name`       | extra field                   |
-| `organization.title`    | `dct:publisher` (fallback)           | se publisher_name assente     |
-| `geographical_name`     | `dct:spatial`                        | extra field                   |
-| `temporal_start/end`    | `dct:temporal`                       | extra field                   |
-| `themes_aggregate`      | `dcat:theme`                         | URI da EU Data Themes         |
-| `maintainer`/`author`   | `dcat:contactPoint`                  | vcard:Kind                    |
-| `url`                   | `dcat:landingPage`                   |                               |
+| Campo CKAN | Proprietà RDF | Note |
+|---|---|---|
+| `id` | `dct:identifier` | |
+| `title` | `dct:title` | |
+| `notes` | `dct:description` | |
+| `tags[].name` | `dcat:keyword` | |
+| `license_title` | `dct:license` | URI da `licenses.yml` |
+| `issued` | `dct:issued` | extra field |
+| `modified` | `dct:modified` | fallback: data corrente |
+| `frequency` | `dct:accrualPeriodicity` | URI EU vocabulary |
+| `language` | `dct:language` | anche `{ITA,DEU}` → URI ISO 639 |
+| `publisher_name` | `dct:publisher` | `dcatapit:Organization` |
+| `holder_name` | `dct:rightsHolder` | fallback: publisher |
+| — | `dct:accessRights` | default PUBLIC |
+| `geographical_name` | `dct:spatial` | extra field |
+| `temporal_start/end` | `dct:temporal` | `PeriodOfTime` con start/end |
+| `themes_aggregate` | `dcat:theme` | URI EU Data Themes |
+| `maintainer`/`author` | `dcat:contactPoint` | `dcatapit:Organization` solo con email valida |
+| `url` | `dcat:landingPage` | fallback: pagina dataset |
 
 ### Livello Distribution (`dcatapit:Distribution`)
 
-| Campo CKAN resource     | Proprietà RDF               |
-|-------------------------|-----------------------------|
-| `id`                    | `dct:identifier`            |
-| `name`                  | `dct:title`                 |
-| `url`                   | `dcat:downloadURL`          |
-| `format`                | `dct:format`                |
-| `size`                  | `dcat:byteSize`             |
-| `created`               | `dct:issued`                |
-| `last_modified`         | `dct:modified`              |
-| `license` (ereditata)   | `dct:license`               |
+| Campo CKAN resource | Proprietà RDF | Note |
+|---|---|---|
+| `id` | `dct:identifier` | |
+| `name` | `dct:title` | |
+| `description` | `dct:description` | |
+| `url` | `dcat:downloadURL` + `dcat:accessURL` | `accessURL` obbligatoria: fallback pagina resource |
+| `format` | `dct:format` | URI EU file-type |
+| `size` | `dcat:byteSize` | |
+| `created` | `dct:issued` | |
+| `last_modified` | `dct:modified` | |
+| `license` | `dct:license` | |
+| (datastore) | distribuzioni CSV/TSV/JSON/XML | da `/datastore/dump/` per `datastore_active=True` |
+
+### Nodi aggiuntivi
+
+- `dcatapit:Organization` per publisher/rightsHolder/contactPoint, con `foaf:name` taggato `@it` e dedup per (name, identifier)
+- `dcatapit:LicenseDocument` per ogni licenza usata nel grafo (nome, tipo, versione)
 
 ---
 
 ## Vocabolari controllati
 
-Alcuni valori CKAN richiedono mapping a URI di vocabolari EU:
+Valori CKAN → URI EU negli `EU_*` di `namespaces.py`:
 
-- **Frequenze**: `http://publications.europa.eu/resource/authority/frequency/`
-  - `DAILY`, `WEEKLY`, `MONTHLY`, `ANNUAL`, `IRREG`, ecc.
-- **Lingue**: `http://publications.europa.eu/resource/authority/language/`
-  - `ITA`, `ENG`, `DEU`, ecc.
-- **Formati**: `http://publications.europa.eu/resource/authority/file-type/`
-  - `CSV`, `JSON`, `PDF`, ecc.
-- **Temi EU DATA**: `http://publications.europa.eu/resource/authority/data-theme/`
+- **Frequenze**: `…/authority/frequency/` — DAILY, WEEKLY, MONTHLY, ANNUAL, IRREG, ecc.
+- **Lingue**: `…/authority/language/` — ITA, ENG, DEU, ecc.
+- **Formati**: `…/authority/file-type/` — CSV, JSON, PDF, ecc.
+- **Temi**: `…/authority/data-theme/`
+- **Access right**: `…/authority/access-right/`
+
+---
+
+## Fallback OWL-required
+
+Diverse regole OWL DCAT-AP IT impongono proprietà che i portali CKAN spesso non forniscono. Il mapper le garantisce in modo silenzioso:
+
+| Proprietà | Fallback |
+|---|---|
+| `dct:accessRights` | `PUBLIC` su ogni Dataset |
+| `dct:accrualPeriodicity` | `UNKNOWN` se assente |
+| `dct:modified` | data corrente se assente |
+| `dct:rightsHolder` | publisher se assente |
+| `dcat:landingPage` | pagina del dataset (mai scartata) |
+| `dcat:accessURL` | pagina CKAN della resource |
+| `dcat:contactPoint` | emesso solo con email valida (`vcard:hasEmail` obbligatoria) |
+| URI non valide | normalizzazione percent-encoding, altrimenti scarto con warning (`_safe_uri`) |
+
+## Robustezza
+
+- **URI non validi** (`_safe_uri`): valida col predicato usato dal serializzatore rdflib, tenta percent-encoding dei caratteri illegali, in ultima istanza scarta il valore con warning per dataset/risorsa
+- **Scrittura atomica del TTL** (`_serialize_atomic`): serializza su file temporaneo univoco (`mkstemp`) e `os.replace()` a esito positivo; su errore il file preesistente resta intatto
+- Dataset con `title` `None` → skip con warning; i portali lenti hanno retry 1x + pausa tra pagine
+- Nomi namespace usati via `DCT["format"]` per evitare conflitti con built-in
 
 ---
 
 ## Testing Strategy
 
-- Framework: `pytest`
-- I test usano fixture JSON statici (nessuna chiamata live al CKAN)
-- Unit test su `mapper.py`: dato un dict CKAN, verifica le triple RDF prodotte
-- Un test di integrazione opzionale può fare 1 richiesta reale e verificare che il Turtle sia valido
+- `pytest` (99 test verdi): `uv run pytest`
+- Fixture statiche in `tests/fixtures/` (risposte reali CKAN), nessuna rete nei test
+- `ruff` come lint: `uv run ruff check .` (config in `pyproject.toml`)
+- Verifica end-to-end sui portali reali (Trentino, Messina, Milano, Umbria) documentata in `LOG.md`
 
 ---
 
-## CLI Design
+## UX dei comandi (umani e agenti)
 
-### Comandi
-
-```
-generate.py generate [OPTIONS]   # Comando principale (default)
-generate.py configure            # Setup guidato interattivo
-```
-
-### Comando `generate`
-
-```python
-@app.command()
-def generate(
-    config: Path = typer.Option("config.yml", "--config", "-c", help="File YAML config"),
-    output: Path = typer.Option(None, "--output", "-o", help="Override output path"),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Output dettagliato"),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Solo fetch, non scrive file"),
-):
-```
-
-**Comportamento:**
-- Con `--verbose`: mostra banner ASCII + progress bar dataset per dataset
-- Senza `--verbose`: output minimale (solo errori + riga finale con count)
-- Con `--dry-run`: mostra tabella riepilogativa senza scrivere il file
-- Sempre: progress bar per la paginazione CKAN (operazione lenta)
-
-**Output esempio (verbose):**
-```
-  ____   ____    _  _____        _    ____
- |  _ \ / ___|  / \|_   _|      / \  |  _ \
- | | | | |     / _ \ | |       / _ \ | |_) |
- | |_| | |___ / ___ \| |      / ___ \|  __/
- |____/ \____/_/   \_\_|     /_/   \_\_|
-
-Portale: https://dati.trentino.it
-Fetching datasets... ████████████████████ 100% (1329/1329)
-
-┌──────────────────────────────────────────────┐
-│ Catalog generato                             │
-│ Dataset:      1329                           │
-│ Distribution: 2847                           │
-│ Output:       output/catalog.ttl (1.2 MB)   │
-└──────────────────────────────────────────────┘
-✓ Fatto!
-```
-
-### Comando `configure`
-
-Wizard interattivo che crea `config.yml` tramite `questionary`:
-
-```
-? URL portale CKAN: https://dati.trentino.it
-? URI del catalogo: https://dati.trentino.it/catalog
-? Titolo catalogo: Catalogo Open Data PAT
-? Nome publisher: Provincia Autonoma di Trento
-? Codice IPA publisher: pat
-? Lingua default [it]: it
-? Path output [output/catalog.ttl]: 
-✓ config.yml creato
-```
-
-### Principi UX (umani)
-
-- **Verbosità progressiva:** banner e tabelle solo con `--verbose` o `configure`
-- **Scriptabile:** tutto configurabile via flag, nessun prompt in modalità non-interattiva
-- **Fail gracefully:** errori su singolo dataset loggati ma non bloccano il resto; riepilogo errori a fine esecuzione
-- **Progress sempre attivo:** la paginazione CKAN può richiedere minuti, la progress bar è sempre visibile
-
-### Principi UX (agenti)
-
-La CLI deve essere utilizzabile da agenti LLM senza intervento umano. Linee guida:
-
-**Non-interattiva per default.** Ogni input è passabile via flag. Il wizard `configure` è solo per umani; in modalità non-interattiva tutto arriva da `--config`.
-
-**`--help` con esempi concreti.** Ogni sottocomando espone esempi copia-incolla:
-
-```
-$ generate.py generate --help
-Options:
-  --config  Path file YAML config  [default: config.yml]
-  --output  Override path output .ttl
-  --verbose Output dettagliato
-  --dry-run Solo fetch, non scrive file
-  --yes     Salta conferme interattive
-
-Examples:
-  generate.py generate --config config.yml
-  generate.py generate --config config.yml --output /tmp/catalog.ttl
-  generate.py generate --config config.yml --dry-run
-```
-
-**Output strutturato su successo.** L'ultima riga di stdout in caso di successo è sempre parsabile:
-
-```
-generated catalog.ttl  datasets=1329 distributions=2847 duration=12s
-```
-
-In caso di errore, stderr riceve un messaggio con l'invocazione corretta:
-
-```
-Error: config file not found: config.yml
-  generate.py generate --config <path-to-config>
-  generate.py configure  # to create a new config interactively
-```
-
-**Fail fast.** Flag mancanti o config invalida → errore immediato con exit code != 0, mai hang su prompt.
-
-**Idempotente.** Rieseguire lo stesso comando sovrascrive l'output senza effetti collaterali.
-
-**`--dry-run` sempre disponibile.** Mostra cosa verrebbe generato (dataset count, output path) senza scrivere file.
-
-**`--yes` per bypassare conferme.** Nessuna domanda interattiva se `--yes` è presente.
-
-**Struttura comandi prevedibile.** Pattern `generate.py <verbo> [OPTIONS]`:
-- `generate.py generate` — genera il Turtle
-- `generate.py configure` — setup interattivo
-- `generate.py validate --config config.yml` — valida la config senza generare (futuro)
+- **Non-interattiva per default**: ogni input passabile via flag; `configure` solo per umani
+- **`--help` con esempi copia-incolla** su ogni sotto-comando
+- **Output strutturato su successo**: l'ultima riga di stdout è sempre parsable — `generated catalog.ttl datasets=N distributions=M duration=Xs`
+- **Fail fast**: flag/config errata → errore immediato, exit code ≠ 0
+- **Idempotente**: rieseguire sovrascrive l'output senza effetti collaterali
+- **`--dry-run` sempre disponibile**: mostra cosa verrebbe generato senza scrivere
+- **`--yes`** bypassa le conferme; niente prompt in modalità non-interattiva
+- Errori su singolo dataset loggati ma non bloccano il resto
 
 ---
 
 ## Boundaries
 
-- **Always:** validare la config YAML all'avvio, loggare errori sui dataset non mappabili senza interrompere
-- **Ask first:** aggiungere nuove dipendenze, modificare il mapping per casi edge non coperti dalla spec
+- **Always:** validare la config YAML all'avvio, loggare gli errori sui dataset non mappabili senza interrompere, scrittura atomica
+- **Ask first:** aggiungere dipendenze, modificare mapping per casi edge non coperti
 - **Never:** richiedere autenticazione CKAN per default, modificare dati sul portale, committare file di output
 
 ---
 
 ## Success Criteria
 
-1. Dato `config.example.yml` puntato su `dati.trentino.it`, lo script produce `catalog.ttl` senza errori
+1. Data una config puntata su un portale CKAN, genera `.ttl` senza errori fatali
 2. Il file prodotto è Turtle valido (parsabile da `rdflib`)
-3. Contiene almeno un `dcatapit:Catalog`, N `dcatapit:Dataset` e le relative `dcatapit:Distribution`
-4. Ogni dataset ha almeno: `dct:title`, `dct:description`, `dct:identifier`, `dct:publisher`
-5. Lo script gira in cron senza input interattivo
+3. Contiene un `dcatapit:Catalog`, N `dcatapit:Dataset` e le relative `dcatapit:Distribution`
+4. Ogni dataset ha almeno `dct:title`, `dct:description`, `dct:identifier`, `dct:publisher`
+5. Gira in cron senza input interattivo (`--yes`/`--dry-run` disponibili)
 
 ---
 
@@ -313,28 +259,18 @@ Error: config file not found: config.yml
 | # | Domanda | Decisione |
 |---|---------|-----------|
 | 1 | Multilingua su `title`/`notes` | Solo il primo valore, nessun tag `@lang` |
-| 2 | Paginazione | Tutti i dataset del portale; config opzionale `query_template` per filtrare (es. `organization:pat`) |
-| 3 | Mapping licenze → URI EU | File YAML esterno `src/licenses.yml` |
-| 4 | Campi non obbligatori assenti | Proprietà omessa, nessun fallback |
-| 5 | Output | Un file `.ttl` unico; con `--organizations org1,org2` genera un file per organizzazione |
+| 2 | Paginazione | Tutti i dataset del portale; `query_template` per filtrare |
+| 3 | Mapping licenze → URI EU | File YAML esterno `licenses.yml` |
+| 4 | Campi obbligatori OWL assenti | Fallback deciso per proprietà (vedi tabella sopra), non scarto uniforme |
+| 5 | URI non valide | Normalizzare poi scartare; `mailto:` esclusi dalla normalizzazione |
+| 6 | Output | File `.ttl` unico; `--organizations` per org; `chunk_size` e `multi_catalog` in config |
+| 7 | Distribuzioni datastore | Aggiunte per `datastore_active=True` saltando formati già presenti |
+| 8 | Scrittura | Atomica, per non pubblicare mai un TTL troncato |
 
-### Dettaglio: query_template in config
+---
 
-```yaml
-portal:
-  url: "https://dati.trentino.it"
-  query_template: "organization:pat"  # opzionale, filtro CKAN fq
-```
+## Riferimenti
 
-### Dettaglio: output per organizzazione
-
-```bash
-# File unico (default)
-generate.py generate --config config.yml
-# → output/catalog.ttl
-
-# File per organizzazione
-generate.py generate --config config.yml --organizations pat,comune-trento
-# → output/pat.ttl
-# → output/comune-trento.ttl
-```
+- OWL DCAT-AP IT: `docs/specs/DCAT-AP_IT.owl` (archivio locale)
+- Regole SPARQL: `dcat_ap_it_generator/rules/` — dettagli in `docs/rules.md`
+- Validatore ufficiale AgID: https://www.dati.gov.it/sviluppatori/validatore
